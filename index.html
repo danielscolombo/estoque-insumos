@@ -961,4 +961,48 @@ function salvarSenha(){
   const conf=document.getElementById('senhaConfirma').value;
   if(atual!==getSenha()){toast('❌ Senha atual incorreta','err');return;}
   if(nova.length<4){toast('❌ Nova senha deve ter ao menos 4 caracteres','err');return;}
-  if(nova!==conf){toast('❌ As s
+  if(nova!==conf){toast('❌ As senhas não coincidem','err');return;}
+  localStorage.setItem('adminSenha',nova);
+  toast('✅ Senha alterada com sucesso!','ok');
+  fecharAdmin();
+}
+
+// ── SAVE CONFIG ──
+async function salvarConfig(){
+  const btn=document.getElementById('btnSaveConfig');
+  if(btn){btn.disabled=true;btn.innerHTML='<div class="spin" style="width:16px;height:16px;border-width:2px;"></div> Salvando…';}
+  const payload={action:'saveConfig',grupos:_adminGrupos,lojas:_adminLojas};
+  const ok=await postData(payload);
+  if(ok){
+    GRUPOS=[..._adminGrupos.map(g=>({...g,itens:[...g.itens]}))];
+    LOJAS=[..._adminLojas];
+    populateSelects();
+    buildForm();
+    updateHdrSub();
+    toast('✅ Configurações salvas!','ok');
+    fecharAdmin();
+  } else {
+    toast('❌ Erro ao salvar. Tente novamente.','err');
+    if(btn){btn.disabled=false;btn.innerHTML='💾 Salvar Configurações';}
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════
+function fmtDate(s){return new Date(s+'T00:00:00').toLocaleDateString('pt-BR');}
+function fmtMes(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return n.charAt(0).toUpperCase()+n.slice(1);}
+function fmtMesCurto(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});return n.charAt(0).toUpperCase()+n.slice(1);}
+function emptyEl(ico,t,msg){return `<div class="empty"><div class="ico">${ico}</div><div class="t">${t}</div><p>${msg}</p></div>`;}
+
+let _tt;
+function toast(msg,type='info'){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className=`toast toast-${type==='ok'?'ok':type==='err'?'err':'info'}`;
+  el.style.display='block';clearTimeout(_tt);_tt=setTimeout(()=>el.style.display='none',3500);
+}
+
+init();
+</script>
+</body>
+</html>
