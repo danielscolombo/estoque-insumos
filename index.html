@@ -27,7 +27,7 @@
     .btn-admin:hover{background:rgba(255,255,255,.25);}
 
     /* SCROLL */
-    .scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:calc(var(--nav-h)+16px);}
+    .scroll{flex:1;overflow-y:auto;overflow-x:hidden;padding-bottom:calc(var(--nav-h) + 80px);}
 
     /* BOTTOM NAV */
     .bnav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);background:#fff;border-top:1.5px solid var(--border);display:flex;z-index:100;box-shadow:0 -3px 12px rgba(0,0,0,.08);}
@@ -64,13 +64,13 @@
     .ihint{font-size:.65rem;color:var(--muted);}
 
     /* SAVE BTN */
-    .save-wrap{position:sticky;bottom:calc(var(--nav-h)+8px);padding:0 12px;margin-top:4px;}
+    .save-wrap{position:fixed;bottom:var(--nav-h);left:0;right:0;padding:8px 12px 6px;background:linear-gradient(to bottom,transparent,var(--bg) 35%);z-index:90;}
     .btn-save{width:100%;padding:14px;border:none;border-radius:12px;background:var(--primary);color:#fff;font-size:.98rem;font-weight:800;cursor:pointer;font-family:inherit;box-shadow:0 4px 16px rgba(27,94,59,.35);display:flex;align-items:center;justify-content:center;gap:8px;transition:all .2s;}
     .btn-save:active{transform:scale(.98);}
     .btn-save:disabled{background:#9CA3AF;box-shadow:none;}
 
     /* ALERT */
-    .alert{display:flex;gap:8px;padding:10px 13px;border-radius:10px;font-size:.8rem;margin-bottom:10px;}
+    .alert{display:block;padding:10px 13px;border-radius:10px;font-size:.8rem;margin-bottom:10px;line-height:1.5;}
     .alert-info{background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;}
     .alert-warn{background:#FFFBEB;color:#92400E;border:1px solid #FDE68A;}
 
@@ -217,7 +217,8 @@
       .desk-nav-btn:hover:not(.active){background:var(--bg);}
       .igrid{grid-template-columns:repeat(5,1fr);}
       .pad,.form-top,.fbar,.srow{max-width:920px;margin-left:auto;margin-right:auto;}
-      .save-wrap{max-width:920px;margin-left:auto;margin-right:auto;}
+      .save-wrap{position:static;background:none;padding:12px 0;max-width:920px;margin:0 auto;}
+      .scroll{padding-bottom:24px;}
     }
     @media(max-width:767px){.desk-nav{display:none;}}
 
