@@ -754,6 +754,7 @@ function renderAdminTab(t){
 
 // ── INSUMOS ──
 function renderAdminInsumos(body,foot){
+  const total = _adminGrupos.length;
   body.innerHTML = _adminGrupos.map((g,gi)=>`
     <div class="ag-block">
       <div class="ag-hdr" onclick="toggleGrupo(${gi})">
@@ -764,14 +765,20 @@ function renderAdminInsumos(body,foot){
         </div>
         <span class="ag-color" style="background:${g.cor}"></span>
         <div class="ag-actions" onclick="event.stopPropagation()">
+          <button class="btn-xs btn-xs-sec" title="Mover para cima" ${gi===0?'disabled style="opacity:.3"':''} onclick="moverGrupo(${gi},-1)">▲</button>
+          <button class="btn-xs btn-xs-sec" title="Mover para baixo" ${gi===total-1?'disabled style="opacity:.3"':''} onclick="moverGrupo(${gi},1)">▼</button>
           <button class="btn-xs btn-xs-del" onclick="delGrupo(${gi})">🗑️</button>
         </div>
-        <span class="ag-arrow ${_expandedGrupos[gi]?'open':''}">▼</span>
+        <span class="ag-arrow ${_expandedGrupos[gi]?'open':''}">❯</span>
       </div>
       ${_expandedGrupos[gi]?`
       <div class="ag-body">
         ${g.itens.map((item,ii)=>`
           <div class="ai-row">
+            <div style="display:flex;flex-direction:column;gap:2px;margin-right:2px;">
+              <button class="btn-xs btn-xs-sec" style="padding:2px 6px;font-size:.7rem;" title="Mover para cima" ${ii===0?'disabled style="opacity:.3"':''} onclick="moverItem(${gi},${ii},-1)">▲</button>
+              <button class="btn-xs btn-xs-sec" style="padding:2px 6px;font-size:.7rem;" title="Mover para baixo" ${ii===g.itens.length-1?'disabled style="opacity:.3"':''} onclick="moverItem(${gi},${ii},1)">▼</button>
+            </div>
             <input class="ai-name-input" value="${item.nome}"
               onchange="_adminGrupos[${gi}].itens[${ii}].nome=this.value" placeholder="Nome do insumo">
             <div class="ai-min-wrap">
@@ -795,6 +802,27 @@ function renderAdminInsumos(body,foot){
 
 function toggleGrupo(gi){
   _expandedGrupos[gi]=!_expandedGrupos[gi];
+  renderAdminTab('insumos');
+}
+function moverGrupo(gi, dir){
+  const novo = gi + dir;
+  if(novo < 0 || novo >= _adminGrupos.length) return;
+  const tmp = _adminGrupos[gi];
+  _adminGrupos[gi] = _adminGrupos[novo];
+  _adminGrupos[novo] = tmp;
+  // Manter expandido o grupo que foi movido
+  const tmpExp = _expandedGrupos[gi];
+  _expandedGrupos[gi] = _expandedGrupos[novo];
+  _expandedGrupos[novo] = tmpExp;
+  renderAdminTab('insumos');
+}
+function moverItem(gi, ii, dir){
+  const itens = _adminGrupos[gi].itens;
+  const novo = ii + dir;
+  if(novo < 0 || novo >= itens.length) return;
+  const tmp = itens[ii];
+  itens[ii] = itens[novo];
+  itens[novo] = tmp;
   renderAdminTab('insumos');
 }
 function delGrupo(gi){
@@ -933,35 +961,4 @@ async function salvarConfig(){
   const payload={action:'saveConfig',grupos:_adminGrupos,lojas:_adminLojas};
   const ok=await postData(payload);
   if(ok){
-    GRUPOS=[..._adminGrupos.map(g=>({...g,itens:[...g.itens]}))];
-    LOJAS=[..._adminLojas];
-    populateSelects();
-    buildForm();
-    updateHdrSub();
-    toast('✅ Configurações salvas!','ok');
-    fecharAdmin();
-  } else {
-    toast('❌ Erro ao salvar. Tente novamente.','err');
-    if(btn){btn.disabled=false;btn.innerHTML='💾 Salvar Configurações';}
-  }
-}
-
-// ═══════════════════════════════════════════════════
-// UTILS
-// ═══════════════════════════════════════════════════
-function fmtDate(s){return new Date(s+'T00:00:00').toLocaleDateString('pt-BR');}
-function fmtMes(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return n.charAt(0).toUpperCase()+n.slice(1);}
-function fmtMesCurto(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});return n.charAt(0).toUpperCase()+n.slice(1);}
-function emptyEl(ico,t,msg){return `<div class="empty"><div class="ico">${ico}</div><div class="t">${t}</div><p>${msg}</p></div>`;}
-
-let _tt;
-function toast(msg,type='info'){
-  const el=document.getElementById('toast');
-  el.textContent=msg;el.className=`toast toast-${type==='ok'?'ok':type==='err'?'err':'info'}`;
-  el.style.display='block';clearTimeout(_tt);_tt=setTimeout(()=>el.style.display='none',3500);
-}
-
-init();
-</script>
-</body>
-</html>
+    GRUPOS=[..._adminGrupos.map(g=>({
