@@ -414,28 +414,39 @@ let _expandedGrupos = {};
 // ═══════════════════════════════════════════════════
 // BACKEND
 // ═══════════════════════════════════════════════════
+// Fetch com timeout para nunca travar
+function fetchComTimeout(url, opts={}, ms=10000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(()=>ctrl.abort(), ms);
+  return fetch(url, {...opts, signal:ctrl.signal})
+    .finally(()=>clearTimeout(timer));
+}
+
 async function fetchConfig() {
   try {
-    const r = await fetch(SCRIPT_URL + '?action=config', {redirect:'follow'});
+    const r = await fetchComTimeout(SCRIPT_URL + '?action=config', {redirect:'follow'});
     const j = await r.json();
     if (j.grupos && j.grupos.length) { GRUPOS = j.grupos; }
     if (j.lojas  && j.lojas.length)  { LOJAS  = j.lojas;  }
-  } catch(e) { /* usar defaults */ }
+  } catch(e) { /* usar defaults silenciosamente */ }
 }
 
 async function fetchEntries() {
   try {
-    const r = await fetch(SCRIPT_URL, {redirect:'follow'});
+    const r = await fetchComTimeout(SCRIPT_URL, {redirect:'follow'});
     const j = await r.json();
     _entries = j.entries || [];
     _loaded  = true;
     updateHdrSub();
-  } catch(e) { toast('⚠️ Erro ao carregar dados.','err'); }
+  } catch(e) {
+    _loaded = true;
+    document.getElementById('hdrSub').textContent = 'Sem conexão — usando dados locais';
+  }
 }
 
 async function postData(payload) {
   try {
-    await fetch(SCRIPT_URL,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)});
+    await fetchComTimeout(SCRIPT_URL,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)},15000);
     return true;
   } catch(e){ return false; }
 }
@@ -445,9 +456,11 @@ async function postData(payload) {
 // ═══════════════════════════════════════════════════
 async function init() {
   document.getElementById('fData').value = new Date().toISOString().slice(0,10);
-  await fetchConfig();
+  // Inicia sem esperar config — usa defaults imediatamente
   populateSelects();
   buildForm();
+  // Carrega config e entradas em paralelo, sem bloquear a tela
+  fetchConfig().then(()=>{ populateSelects(); buildForm(); });
   fetchEntries();
 }
 
@@ -948,17 +961,4 @@ function salvarSenha(){
   const conf=document.getElementById('senhaConfirma').value;
   if(atual!==getSenha()){toast('❌ Senha atual incorreta','err');return;}
   if(nova.length<4){toast('❌ Nova senha deve ter ao menos 4 caracteres','err');return;}
-  if(nova!==conf){toast('❌ As senhas não coincidem','err');return;}
-  localStorage.setItem('adminSenha',nova);
-  toast('✅ Senha alterada com sucesso!','ok');
-  fecharAdmin();
-}
-
-// ── SAVE CONFIG ──
-async function salvarConfig(){
-  const btn=document.getElementById('btnSaveConfig');
-  if(btn){btn.disabled=true;btn.innerHTML='<div class="spin" style="width:16px;height:16px;border-width:2px;"></div> Salvando…';}
-  const payload={action:'saveConfig',grupos:_adminGrupos,lojas:_adminLojas};
-  const ok=await postData(payload);
-  if(ok){
-    GRUPOS=[..._adminGrupos.map(g=>({
+  if(nova!==conf){toast('❌ As s
