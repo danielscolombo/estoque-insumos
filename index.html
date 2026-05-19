@@ -222,6 +222,29 @@
     }
     @media(max-width:767px){.desk-nav{display:none;}}
 
+    /* HIST STICKY COLS */
+    .hist-tbl th.s-date,.hist-tbl td.s-date{position:sticky;left:0;z-index:3;min-width:82px;}
+    .hist-tbl th.s-date{background:var(--bg);}
+    .hist-tbl td.s-date{background:#fff;}
+    .hist-tbl th.s-loja,.hist-tbl td.s-loja{position:sticky;left:82px;z-index:3;min-width:88px;border-right:1.5px solid var(--border);}
+    .hist-tbl th.s-loja{background:var(--bg);}
+    .hist-tbl td.s-loja{background:#fff;}
+    .trow-g td.s-date,.trow-g td.s-loja{background:#F0F7F3;}
+    tbody tr:hover td.s-date,tbody tr:hover td.s-loja{background:#F9FBF9!important;}
+
+    /* COMPRAS COMPACT (mobile) */
+    @media(max-width:767px){
+      .col-m-hide{display:none!important;}
+      .cprs-tbl td,.cprs-tbl th{padding:5px 4px;font-size:.76rem;}
+      .cprs-wrap{overflow-x:hidden;}
+    }
+
+    /* ADMIN INACTIVE GROUP */
+    .ag-inactive .ag-name{color:var(--muted);text-decoration:line-through;}
+    .ag-inactive .ag-emoji,.ag-inactive .ag-count{opacity:.4;}
+    .btn-xs-on{background:#DCFCE7;color:#15803D;}
+    .btn-xs-off{background:#F3F4F6;color:#6B7280;}
+
     .hidden{display:none!important;}
   </style>
 </head>
@@ -476,7 +499,7 @@ function populateSelects() {
     document.getElementById(id).innerHTML = '<option value="">Todas as lojas</option>' +
       LOJAS.map(l=>`<option value="${l}">${l}</option>`).join('');
   });
-  const gOpts = GRUPOS.map(g=>`<option value="${g.id}">${g.emoji} ${g.label}</option>`).join('');
+  const gOpts = GRUPOS.filter(g=>g.ativo!==false).map(g=>`<option value="${g.id}">${g.emoji} ${g.label}</option>`).join('');
   ['cGrupo','cpGrupo'].forEach(id=>{
     document.getElementById(id).innerHTML = '<option value="">Todos os grupos</option>' + gOpts;
   });
@@ -496,7 +519,7 @@ function updateHdrSub() {
 // ═══════════════════════════════════════════════════
 function buildForm() {
   const wrap = document.getElementById('formInsumos');
-  wrap.innerHTML = GRUPOS.map(g=>`
+  wrap.innerHTML = GRUPOS.filter(g=>g.ativo!==false).map(g=>`
     <div class="card" style="margin-bottom:10px;">
       <div class="card-hdr">
         <span class="gbadge" style="background:${g.cor}">${g.emoji} ${g.label}</span>
@@ -582,7 +605,7 @@ function renderHist(){
   let ents=[..._entries];
   if(lF)ents=ents.filter(e=>e.loja===lF);
   if(mF)ents=ents.filter(e=>e.data.startsWith(mF));
-  ents.sort((a,b)=>b.data.localeCompare(a.data));
+  ents=ents.filter(e=>e.data);ents.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
   const wrap=document.getElementById('histContent');
   if(!ents.length){wrap.innerHTML=emptyEl('📭','Nenhum registro','Registre o primeiro abastecimento.');return;}
   const lojas=new Set(ents.map(e=>e.loja));
@@ -594,11 +617,11 @@ function renderHist(){
   GRUPOS.forEach(g=>{
     html+=`<div class="card" style="margin-bottom:10px;">
       <div class="card-hdr"><span class="gbadge" style="background:${g.cor}">${g.emoji} ${g.label}</span></div>
-      <div class="tbl-wrap"><table><thead><tr><th>DATA</th><th>LOJA</th>
+      <div class="tbl-wrap"><table class="hist-tbl"><thead><tr><th class="s-date">DATA</th><th class="s-loja">LOJA</th>
         ${g.itens.map(i=>`<th>${i.nome}</th>`).join('')}<th></th>
       </tr></thead><tbody>
         ${ents.map(e=>`<tr>
-          <td><strong>${fmtDate(e.data)}</strong></td><td>${e.loja}</td>
+          <td class="s-date"><strong>${fmtDate(e.data)}</strong></td><td class="s-loja">${e.loja}</td>
           ${g.itens.map(i=>{
             const k=`${g.id}||${i.nome}`,v=e.insumos[k];
             const low=v!=null&&v!=undefined&&v<i.min;
@@ -632,7 +655,7 @@ function calcConsumo(){
     for(let i=1;i<ents.length;i++){
       const prev=ents[i-1],curr=ents[i],mes=curr.data.slice(0,7);
       if(!consumo[loja][mes])consumo[loja][mes]={};
-      GRUPOS.forEach(g=>g.itens.forEach(item=>{
+      GRUPOS.filter(g=>g.ativo!==false).forEach(g=>g.itens.forEach(item=>{
         const k=`${g.id}||${item.nome}`,pv=prev.insumos[k],cv=curr.insumos[k];
         if(pv!=null&&pv!=undefined&&cv!=null&&cv!=undefined){
           const d=pv-cv;if(d>0)consumo[loja][mes][k]=(consumo[loja][mes][k]||0)+d;
@@ -648,7 +671,8 @@ function renderConsumo(){
   const ljs=lF?[lF]:LOJAS.filter(l=>consumo[l]&&Object.keys(consumo[l]).length);
   if(!ljs.length){wrap.innerHTML=emptyEl('📊','Dados insuficientes','São necessários pelo menos 2 abastecimentos por loja.');return;}
   const allM=[...new Set(Object.values(consumo).flatMap(ld=>Object.keys(ld)))].sort();
-  const grps=gF?GRUPOS.filter(g=>g.id===gF):GRUPOS;
+  const activeGrupos=GRUPOS.filter(g=>g.ativo!==false);
+  const grps=gF?activeGrupos.filter(g=>g.id===gF):activeGrupos;
   let html='';
   ljs.forEach(loja=>{
     if(!consumo[loja])return;
@@ -680,7 +704,8 @@ function renderCompras(){
   const ultEst={};
   _entries.forEach(e=>{if(!ultEst[e.loja]||e.data>ultEst[e.loja].data)ultEst[e.loja]=e;});
   if(!Object.keys(ultEst).length){wrap.innerHTML=emptyEl('🛒','Nenhum dado','Registre abastecimentos para sugestões.');return;}
-  const ljs=lF?[lF]:LOJAS,grps=gF?GRUPOS.filter(g=>g.id===gF):GRUPOS;
+  const _ag=GRUPOS.filter(g=>g.ativo!==false);
+  const ljs=lF?[lF]:LOJAS,grps=gF?_ag.filter(g=>g.id===gF):_ag;
   let html='',temItem=false;
   ljs.forEach(loja=>{
     if(!ultEst[loja])return;
@@ -700,11 +725,9 @@ function renderCompras(){
         if(sF&&status!==sF)return;
         temItem=true;
         const sl=status==='critico'?'🔴 Crítico':status==='atencao'?'🟡 Atenção':'🟢 OK';
-        const pct=Math.min(100,Math.round(est/(item.min*2||1)*100));
-        const bc=status==='critico'?'#DC2626':status==='atencao'?'#D97706':'#16A34A';
         rows+=`<tr><td><strong>${item.nome}</strong></td>
-          <td>${est}<span class="pbw"><span class="pb" style="width:${pct}%;background:${bc}"></span></span></td>
-          <td>${item.min}</td><td>${media>0?media.toFixed(1):'—'}</td>
+          <td>${est}</td>
+          <td class="col-m-hide">${item.min}</td><td class="col-m-hide">${media>0?media.toFixed(1):'—'}</td>
           <td><span class="bdg ${bcls}">${sl}</span></td>
           <td>${sug>0?`<span class="qty ${status==='critico'?'qty-c':'qty-w'}">${sug} un</span>`:'<span class="qty-0">—</span>'}</td></tr>`;
       });
@@ -712,8 +735,8 @@ function renderCompras(){
     });
     if(tbody)html+=`<div class="lb">
       <div class="lb-hdr">🏪 ${loja}<span class="sub">Último: ${fmtDate(lat.data)}</span></div>
-      <div class="tbl-wrap"><table><thead><tr>
-        <th>INSUMO</th><th>ESTOQUE</th><th>MÍN</th><th>CONSUMO/MÊS</th><th>STATUS</th><th>SUGESTÃO</th>
+      <div class="tbl-wrap cprs-wrap"><table class="cprs-tbl"><thead><tr>
+        <th>INSUMO</th><th>ESTOQUE</th><th class="col-m-hide">MÍN</th><th class="col-m-hide">MÉDIA/MÊS</th><th>STATUS</th><th>COMPRAR</th>
       </tr></thead><tbody>${tbody}</tbody></table></div></div>`;
   });
   if(!temItem){wrap.innerHTML=emptyEl('✅','Nenhum item','Ajuste os filtros ou registre mais abastecimentos.');return;}
@@ -769,7 +792,7 @@ function renderAdminTab(t){
 function renderAdminInsumos(body,foot){
   const total = _adminGrupos.length;
   body.innerHTML = _adminGrupos.map((g,gi)=>`
-    <div class="ag-block">
+    <div class="ag-block${g.ativo!==false?'':' ag-inactive'}">
       <div class="ag-hdr" onclick="toggleGrupo(${gi})">
         <div class="ag-hdr-left">
           <span class="ag-emoji">${g.emoji}</span>
@@ -780,6 +803,7 @@ function renderAdminInsumos(body,foot){
         <div class="ag-actions" onclick="event.stopPropagation()">
           <button class="btn-xs btn-xs-sec" title="Mover para cima" ${gi===0?'disabled style="opacity:.3"':''} onclick="moverGrupo(${gi},-1)">▲</button>
           <button class="btn-xs btn-xs-sec" title="Mover para baixo" ${gi===total-1?'disabled style="opacity:.3"':''} onclick="moverGrupo(${gi},1)">▼</button>
+          <button class="btn-xs ${g.ativo!==false?'btn-xs-on':'btn-xs-off'}" title="${g.ativo!==false?'Desativar grupo':'Ativar grupo'}" onclick="toggleAtivoGrupo(${gi})">${g.ativo!==false?'🟢':'⚫'}</button>
           <button class="btn-xs btn-xs-del" onclick="delGrupo(${gi})">🗑️</button>
         </div>
         <span class="ag-arrow ${_expandedGrupos[gi]?'open':''}">❯</span>
@@ -836,6 +860,10 @@ function moverItem(gi, ii, dir){
   const tmp = itens[ii];
   itens[ii] = itens[novo];
   itens[novo] = tmp;
+  renderAdminTab('insumos');
+}
+function toggleAtivoGrupo(gi){
+  _adminGrupos[gi].ativo=_adminGrupos[gi].ativo===false;
   renderAdminTab('insumos');
 }
 function delGrupo(gi){
@@ -990,7 +1018,52 @@ async function salvarConfig(){
 // ═══════════════════════════════════════════════════
 // UTILS
 // ═══════════════════════════════════════════════════
-function fmtDate(s){return new Date(s+'T00:00:00').toLocaleDateString('pt-BR');}
+function fmtDate(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return isNaN(d)?s:d.toLocaleDateString('pt-BR');}
+function fmtMes(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return n.charAt(0).toUpperCase()+n.slice(1);}
+function fmtMesCurto(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});return n.charAt(0).toUpperCase()+n.slice(1);}
+function emptyEl(ico,t,msg){return `<div class="empty"><div class="ico">${ico}</div><div class="t">${t}</div><p>${msg}</p></div>`;}
+
+let _tt;
+function toast(msg,type='info'){
+  const el=document.getElementById('toast');
+  el.textContent=msg;el.className=`toast toast-${type==='ok'?'ok':type==='err'?'err':'info'}`;
+  el.style.display='block';clearTimeout(_tt);_tt=setTimeout(()=>el.style.display='none',3500);
+}
+
+init();
+</script>
+</body>
+</html>
+enhas não coincidem','err');return;}
+  localStorage.setItem('adminSenha',nova);
+  toast('✅ Senha alterada com sucesso!','ok');
+  fecharAdmin();
+}
+
+// ── SAVE CONFIG ──
+async function salvarConfig(){
+  const btn=document.getElementById('btnSaveConfig');
+  if(btn){btn.disabled=true;btn.innerHTML='<div class="spin" style="width:16px;height:16px;border-width:2px;"></div> Salvando…';}
+  const payload={action:'saveConfig',grupos:_adminGrupos,lojas:_adminLojas};
+  const ok=await postData(payload);
+  if(ok){
+    GRUPOS=[..._adminGrupos.map(g=>({...g,itens:[...g.itens]}))];
+    LOJAS=[..._adminLojas];
+    populateSelects();
+    buildForm();
+    updateHdrSub();
+    toast('✅ Configurações salvas!','ok');
+    fecharAdmin();
+  } else {
+    toast('❌ Erro ao salvar. Tente novamente.','err');
+    if(btn){btn.disabled=false;btn.innerHTML='💾 Salvar Configurações';}
+  }
+}
+
+// ═══════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════
+function fmtDate(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return isNaN(d)?s:d.toLocaleDateString('pt-BR');}
 function fmtMes(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return n.charAt(0).toUpperCase()+n.slice(1);}
 function fmtMesCurto(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});return n.charAt(0).toUpperCase()+n.slice(1);}
 function emptyEl(ico,t,msg){return `<div class="empty"><div class="ico">${ico}</div><div class="t">${t}</div><p>${msg}</p></div>`;}
