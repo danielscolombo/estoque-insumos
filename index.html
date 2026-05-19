@@ -631,7 +631,7 @@ function renderHist(){
           ${g.itens.map(i=>{
             const k=`${g.id}||${i.nome}`,v=e.insumos[k];
             let sym='',sty='';
-            if(v!=null&&v!=undefined){if(v<i.min){sym=' 🔴';sty='color:var(--danger);font-weight:700;'}else if(v<i.min*1.5){sym=' 🟡';sty='color:var(--warn);font-weight:600;'}}
+            if(v!=null&&v!=undefined){if(v<i.min){sym='<span style="font-size:.65rem"> 🔴</span>';sty='color:var(--danger);font-weight:700;'}else if(v<i.min*1.5){sym='<span style="font-size:.65rem"> 🟡</span>';sty='color:var(--warn);font-weight:600;'}else{sym='<span style="font-size:.65rem"> 🟢</span>';}}
             return `<td style="${sty}">${v===null||v===undefined?'—':v}${sym}</td>`;
           }).join('')}
           <td><button onclick="delEntry('${e.id}')"
