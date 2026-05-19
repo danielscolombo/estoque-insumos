@@ -445,6 +445,10 @@ function fetchComTimeout(url, opts={}, ms=10000) {
     .finally(()=>clearTimeout(timer));
 }
 
+function _restoreAtivo(grupos){
+  try{const m=JSON.parse(localStorage.getItem('gruposAtivo')||'{}');grupos.forEach(g=>{if(g.id in m)g.ativo=m[g.id];});}catch(e){}
+}
+
 async function fetchConfig() {
   try {
     const r = await fetchComTimeout(SCRIPT_URL + '?action=config', {redirect:'follow'});
@@ -452,6 +456,7 @@ async function fetchConfig() {
     if (j.grupos && j.grupos.length) { GRUPOS = j.grupos; }
     if (j.lojas  && j.lojas.length)  { LOJAS  = j.lojas;  }
   } catch(e) { /* usar defaults silenciosamente */ }
+  _restoreAtivo(GRUPOS);
 }
 
 async function fetchEntries() {
@@ -479,7 +484,8 @@ async function postData(payload) {
 // ═══════════════════════════════════════════════════
 async function init() {
   document.getElementById('fData').value = new Date().toISOString().slice(0,10);
-  // Inicia sem esperar config — usa defaults imediatamente
+  // Restaurar estado ativo/inativo antes de montar a tela
+  _restoreAtivo(GRUPOS);
   populateSelects();
   buildForm();
   // Carrega config e entradas em paralelo, sem bloquear a tela
@@ -624,8 +630,9 @@ function renderHist(){
           <td class="s-date"><strong>${fmtDate(e.data)}</strong></td><td class="s-loja">${e.loja}</td>
           ${g.itens.map(i=>{
             const k=`${g.id}||${i.nome}`,v=e.insumos[k];
-            const low=v!=null&&v!=undefined&&v<i.min;
-            return `<td style="${low?'color:var(--danger);font-weight:700;':''}">${v===null||v===undefined?'—':v}${low?' ⚠️':''}</td>`;
+            let sym='',sty='';
+            if(v!=null&&v!=undefined){if(v<i.min){sym=' 🔴';sty='color:var(--danger);font-weight:700;'}else if(v<i.min*1.5){sym=' 🟡';sty='color:var(--warn);font-weight:600;'}}
+            return `<td style="${sty}">${v===null||v===undefined?'—':v}${sym}</td>`;
           }).join('')}
           <td><button onclick="delEntry('${e.id}')"
             style="border:none;background:#FEE2E2;color:#991B1B;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:.75rem;font-weight:700;">🗑️</button></td>
@@ -1004,6 +1011,8 @@ async function salvarConfig(){
   if(ok){
     GRUPOS=[..._adminGrupos.map(g=>({...g,itens:[...g.itens]}))];
     LOJAS=[..._adminLojas];
+    // Persistir estado ativo/inativo no localStorage
+    const _am={};GRUPOS.forEach(g=>{_am[g.id]=g.ativo!==false;});localStorage.setItem('gruposAtivo',JSON.stringify(_am));
     populateSelects();
     buildForm();
     updateHdrSub();
@@ -1018,19 +1027,6 @@ async function salvarConfig(){
 // ═══════════════════════════════════════════════════
 // UTILS
 // ═══════════════════════════════════════════════════
-function fmtDate(s){if(!s)return'—';let d=new Date(s+'T00:00:00');if(isNaN(d))d=new Date(s);if(isNaN(d))return'—';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
+function fmtDate(s){if(!s)return'—';let d=new Date(s+'T00:00:00');if(isNaN(d))d=new Date(s);if(isNaN(d))return'—';return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'2-digit'});}
 function fmtMes(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});return n.charAt(0).toUpperCase()+n.slice(1);}
-function fmtMesCurto(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});return n.charAt(0).toUpperCase()+n.slice(1);}
-function emptyEl(ico,t,msg){return `<div class="empty"><div class="ico">${ico}</div><div class="t">${t}</div><p>${msg}</p></div>`;}
-
-let _tt;
-function toast(msg,type='info'){
-  const el=document.getElementById('toast');
-  el.textContent=msg;el.className=`toast toast-${type==='ok'?'ok':type==='err'?'err':'info'}`;
-  el.style.display='block';clearTimeout(_tt);_tt=setTimeout(()=>el.style.display='none',3500);
-}
-
-init();
-</script>
-</body>
-</html>
+function fmtMesCurto(s){const[y,m]=s.split('-');const n=new Date(y,m-1,1).toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});r
