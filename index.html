@@ -1027,4 +1027,10 @@ let _tt;
 function toast(msg,type='info'){
   const el=document.getElementById('toast');
   el.textContent=msg;el.className=`toast toast-${type==='ok'?'ok':type==='err'?'err':'info'}`;
-  el.style.display='block';clearTimeout(_tt);_tt
+  el.style.display='block';clearTimeout(_tt);_tt=setTimeout(()=>el.style.display='none',3500);
+}
+
+init();
+</script>
+</body>
+</html>
