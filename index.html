@@ -361,7 +361,6 @@
       </div>
       <div id="passErro" style="color:var(--danger);font-size:.82rem;margin-bottom:10px;display:none;">❌ Senha incorreta</div>
       <button class="btn-prim" style="width:100%;justify-content:center;" onclick="verificarSenha()">Entrar</button>
-      <p style="font-size:.72rem;color:var(--muted);text-align:center;margin-top:12px;">Senha padrão: <strong>admin2026</strong></p>
     </div>
   </div>
 </div>
@@ -512,7 +511,7 @@ function populateSelects() {
 }
 
 function updateHdrSub() {
-  const lojas = new Set(_entries.map(e=>e.loja)).size;
+  const lojas = LOJAS.length;
   const total = GRUPOS.reduce((a,g)=>a+g.itens.length,0);
   document.getElementById('hdrSub').textContent =
     `${_entries.length} registros · ${lojas} loja(s) · ${total} insumos`;
