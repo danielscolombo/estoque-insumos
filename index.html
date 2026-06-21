@@ -646,6 +646,9 @@ function renderHist(){
   wrap.innerHTML=html;
 }
 async function delEntry(id){
+  const s=prompt('🔒 Digite a senha de admin para excluir:');
+  if(s===null)return;
+  if(s!==getSenha()){toast('❌ Senha incorreta','err');return;}
   if(!confirm('Excluir este registro?'))return;
   await postData({action:'delete',id});
   _entries=_entries.filter(e=>e.id!==id);
