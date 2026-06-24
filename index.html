@@ -458,11 +458,27 @@ async function fetchConfig() {
   _restoreAtivo(GRUPOS);
 }
 
+// Normaliza qualquer formato de data para AAAA-MM-DD (corrige datas que vêm
+// como "Mon Jun 22 2026 ..." do backend, que quebravam a ordenação por texto)
+function normData(d){
+  if(d==null) return '';
+  if(d instanceof Date){ if(isNaN(d)) return ''; }
+  else {
+    const s = String(d).trim();
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(m) return `${m[1]}-${m[2]}-${m[3]}`;
+    d = new Date(s);
+    if(isNaN(d)) return s;
+  }
+  const y=d.getFullYear(), mo=String(d.getMonth()+1).padStart(2,'0'), da=String(d.getDate()).padStart(2,'0');
+  return `${y}-${mo}-${da}`;
+}
+
 async function fetchEntries() {
   try {
     const r = await fetchComTimeout(SCRIPT_URL, {redirect:'follow'});
     const j = await r.json();
-    _entries = j.entries || [];
+    _entries = (j.entries || []).map(e => ({...e, data: normData(e.data)}));
     _loaded  = true;
     updateHdrSub();
   } catch(e) {
