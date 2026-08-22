@@ -51,6 +51,51 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .pill.ENVIADA{background:#FEF3C7;border-color:#FCD34D;color:#92400E;}
 .pill.VALIDADA{background:#DCFCE7;border-color:#86EFAC;color:#15803D;}
 .sit .quando{font-size:.72rem;color:var(--muted);}
+.sit-dir{margin-left:auto;display:flex;gap:6px;}
+
+/* ───────── FOLHA DE IMPRESSÃO / PDF ───────── */
+#impressao{display:none;}
+@media print{
+  @page{size:A4 landscape;margin:8mm;}
+  html,body{background:#fff !important;height:auto !important;overflow:visible !important;}
+  body>*{display:none !important;}
+  body>#impressao{display:block !important;}
+  *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
+  #impressao{font-family:'Segoe UI',system-ui,sans-serif;color:#1F1620;}
+  .pr-cab{display:flex;align-items:flex-end;gap:14px;border-bottom:2.5px solid #4E1B30;padding-bottom:6px;margin-bottom:9px;}
+  .pr-t{font-size:15pt;font-weight:800;letter-spacing:1.5px;color:#4E1B30;}
+  .pr-s{font-size:10.5pt;font-weight:700;color:#6B6470;margin-top:2px;}
+  .pr-sel{margin-left:auto;text-align:right;font-size:8pt;font-weight:800;letter-spacing:1px;color:#15803D;
+          border:1.5px solid #86EFAC;background:#DCFCE7;border-radius:4px;padding:4px 9px;}
+  .pr-sel small{display:block;font-weight:600;letter-spacing:0;color:#4B7A5A;font-size:7pt;margin-top:1px;}
+  .pr-bl{page-break-inside:avoid;margin-bottom:8px;}
+  .pr-sem{font-size:7.5pt;font-weight:800;letter-spacing:1.2px;color:#6B6470;margin-bottom:2px;}
+  table.pr-gr,table.pr-ass{width:100%;border-collapse:collapse;table-layout:fixed;}
+  table.pr-gr th,table.pr-gr td,table.pr-ass td{border:.6pt solid #B9AFB6;padding:3px 2px;text-align:center;
+          font-size:7.5pt;font-weight:600;word-break:break-word;}
+  table.pr-gr th{background:#4E1B30;color:#fff;font-size:6.5pt;font-weight:800;letter-spacing:.5px;}
+  table.pr-gr th b{display:block;font-size:10pt;margin-top:1px;}
+  table.pr-gr th i{display:block;font-style:normal;font-size:5.5pt;background:#FFD84D;color:#6B2018;
+          border-radius:2px;margin-top:1px;font-weight:800;}
+  table.pr-gr th.fer{background:#A62A21;}
+  table.pr-gr th.dom{background:#6B2544;}
+  table.pr-gr th.fora,table.pr-gr td.fora{background:#E9E5E7;color:#9A929A;}
+  table.pr-gr th.nm,table.pr-gr td.nm,table.pr-ass td.nm{width:15%;text-align:left;padding-left:6px;font-weight:800;}
+  table.pr-gr td.nm{background:#F3EFF1;font-size:7.5pt;}
+  table.pr-gr td.ABERTURA{background:#FDF3DC;}
+  table.pr-gr td.INTERMEDIARIO{background:#EFEBFA;}
+  table.pr-gr td.FECHAMENTO{background:#E4F1F7;}
+  table.pr-gr td.DOMINGO{background:#FBE7F0;}
+  table.pr-gr td.FOLGA{background:#FFD84D;font-weight:800;}
+  table.pr-gr td.AUSENCIA{background:#E4E0E2;font-weight:800;}
+  table.pr-gr td.fer{box-shadow:inset 0 0 0 1pt #A62A21;}
+  table.pr-gr tr.cob td{background:#F3EFF1;font-weight:800;font-size:8pt;}
+  .pr-rod{display:flex;gap:26px;font-size:7.5pt;line-height:1.5;color:#4A424C;margin:10px 0 12px;
+          border-top:.8pt solid #B9AFB6;padding-top:7px;page-break-inside:avoid;}
+  .pr-rod b{font-size:6.5pt;letter-spacing:1px;color:#6B6470;}
+  table.pr-ass td{height:26px;text-align:left;padding-left:6px;font-size:7pt;color:#9A929A;font-weight:600;}
+  table.pr-ass td.nm{color:#1F1620;font-size:8pt;}
+}
 
 /* SEMANA */
 .semdiv{display:flex;align-items:center;gap:9px;margin:16px 12px 8px;}
@@ -524,6 +569,75 @@ function renderEscala(){
   renderLegenda();
 }
 
+// ═══════════════════════════════════════════════════
+// PDF — monta um documento limpo e chama a impressão do
+// navegador. No celular, "Imprimir" > "Salvar como PDF".
+// ═══════════════════════════════════════════════════
+function htmlImpressao(){
+  const vs=ativas(loja), [a,m]=mes.split('-').map(Number);
+  const FER=feriadosDoMes(a,m,loja);
+  const c=cadLoja(loja);
+  const s=STATUS[chave()]||{};
+
+  let h='<div class="pr-cab">'+
+        '<div><div class="pr-t">ESCALA DE TRABALHO</div>'+
+        '<div class="pr-s">'+esc(loja)+' &nbsp;·&nbsp; '+MESES[m-1]+' '+a+'</div></div>'+
+        '<div class="pr-sel">VALIDADA<small>'+esc(fmtData(s.atualizado||''))+'</small></div></div>';
+
+  semanasDoMes().forEach((sem,si)=>{
+    const noMes=sem.filter(d=>d.noMes);
+    h+='<div class="pr-bl"><div class="pr-sem">SEMANA '+(si+1)+' &nbsp;·&nbsp; '+
+       noMes[0].dia+' a '+noMes[noMes.length-1].dia+'</div>'+
+       '<table class="pr-gr"><thead><tr><th class="nm">NOME</th>';
+    sem.forEach(d=>{
+      const f=d.noMes?FER[d.dia]:null;
+      const cl=!d.noMes?'fora':(f?'fer':(d.dow===0?'dom':''));
+      h+='<th class="'+cl+'">'+DOW[d.dow]+'<b>'+(d.noMes?pad(d.dia):'–')+'</b>'+
+         (f?'<i>FERIADO</i>':'')+'</th>';
+    });
+    h+='</tr></thead><tbody>';
+    vs.forEach(v=>{
+      h+='<tr><td class="nm">'+esc(v.nome)+'</td>';
+      sem.forEach(d=>{
+        if(!d.noMes){ h+='<td class="fora"></td>'; return; }
+        const val=valor(v.nome,d.dia);
+        h+='<td class="'+classeDe(loja,val)+(FER[d.dia]?' fer':'')+'">'+esc(val||'')+'</td>';
+      });
+      h+='</tr>';
+    });
+    h+='<tr class="cob"><td class="nm">NA LOJA</td>';
+    sem.forEach(d=>{
+      if(!d.noMes){ h+='<td class="fora"></td>'; return; }
+      let n=0; vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d.dia))) n++; });
+      h+='<td>'+(n||'–')+'</td>';
+    });
+    h+='</tr></tbody></table></div>';
+  });
+
+  // legenda de turnos e feriados do mês
+  h+='<div class="pr-rod"><div><b>TURNOS</b><br>'+
+     c.turnos.map(t=>esc(rot(t))+' &nbsp;'+esc((ROT_TIPO[norm(t.tipo)]||t.tipo).toLowerCase())).join('<br>')+'</div>';
+  const dias=Object.keys(FER).map(Number).sort((x,y)=>x-y);
+  h+='<div><b>FERIADOS DO MÊS</b><br>'+
+     (dias.length?dias.map(d=>pad(d)+'/'+pad(m)+' &nbsp;'+esc(FER[d])).join('<br>'):'nenhum')+'</div></div>';
+
+  // ciente das colaboradoras
+  h+='<div class="pr-bl"><div class="pr-sem">CIENTE DA ESCALA &nbsp;·&nbsp; '+
+     esc(loja)+' &nbsp;·&nbsp; '+MESES[m-1]+' '+a+'</div><table class="pr-ass"><tbody>';
+  vs.forEach(v=>{ h+='<tr><td class="nm">'+esc(v.nome)+'</td><td>Assinatura</td><td>Data</td></tr>'; });
+  h+='</tbody></table></div>';
+
+  return h;
+}
+
+function gerarPDF(){
+  const el=$('#impressao');
+  el.innerHTML=htmlImpressao();
+  const antes=document.title;
+  document.title='Escala '+loja+' '+mes;      // vira o nome do arquivo
+  setTimeout(()=>{ window.print(); document.title=antes; },60);
+}
+
 function avisoTrava(){
   const sit=sitDo();
   if(sit==='VALIDADA' && !admin)
@@ -633,9 +747,15 @@ function renderSit(){
   let h='<span class="pill '+sit+'">'+sit+'</span>'+
     (s.atualizado?'<span class="quando">atualizada em '+esc(fmtData(s.atualizado))+(s.por?' · '+esc(s.por):'')+'</span>':'');
   if(sit==='VALIDADA' && !admin) h+='<span class="trava">🔒 fechada</span>';
-  if(admin && sit!=='VALIDADA')  h+='<button class="bt" id="btValidar" style="margin-left:auto">Validar</button>';
-  if(admin && sit==='VALIDADA')  h+='<button class="bt bt-ghost" id="btReabrir" style="margin-left:auto">Reabrir</button>';
+  let dir='';
+  if(sit==='VALIDADA')           dir+='<button class="bt bt-ghost" id="btPDF">📄 PDF</button>';
+  if(admin && sit!=='VALIDADA')  dir+='<button class="bt" id="btValidar">Validar</button>';
+  if(admin && sit==='VALIDADA')  dir+='<button class="bt bt-ghost" id="btReabrir">Reabrir</button>';
+  if(dir) h+='<span class="sit-dir">'+dir+'</span>';
   $('#sitBox').innerHTML=h;
+
+  const bp=$('#btPDF');
+  if(bp) bp.onclick=()=>gerarPDF();
 
   const bv=$('#btValidar');
   if(bv) bv.onclick=async()=>{
@@ -973,5 +1093,6 @@ async function init(){
   window.addEventListener('beforeunload',e=>{ if(sujo){ e.preventDefault(); e.returnValue=''; } });
 }
 </script>
+<div id="impressao"></div>
 </body>
 </html>
