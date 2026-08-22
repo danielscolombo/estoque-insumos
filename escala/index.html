@@ -201,6 +201,11 @@ tr.tot td{background:#FAF8F9;font-weight:800;}
 <div class="scroll" id="scroll">
 
   <section id="scEscala">
+    <div class="aviso" id="semFalha" hidden style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+      <b>Não consegui ler a escala deste mês.</b>
+      <span>A tela pode estar em branco sem estar vazia de verdade. Salvar está bloqueado para não apagar o que já está gravado.</span>
+      <button class="bt" id="btRecarregar">Tentar de novo</button>
+    </div>
     <div class="sit" id="sitBox"></div>
     <div id="listaDias"></div>
     <div class="legend" id="legenda"></div>
@@ -286,6 +291,7 @@ let ESC={};                 // { "loja|mes": { vendedora: {dia: rotulo} } }
 let STATUS={};              // { "loja|mes": {situacao, atualizado, por} }
 let loja='', mes='', sujo=false, tela='Escala', admin=false;
 let VISTA = localStorage.getItem('escVista') || 'grade';
+let carregouOk = true;
 
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
@@ -354,17 +360,22 @@ async function carregarStatus(){
 }
 async function carregarEscala(){
   const k=chave();
-  try{
-    const r=await fetchTO(SCRIPT_URL+'?action=escala&loja='+encodeURIComponent(loja)+'&mes='+encodeURIComponent(mes),{redirect:'follow'});
-    const j=await r.json();
-    const m={};
-    (j.escala||[]).forEach(l=>{m[l.vendedora]=l.dias||{};});
-    ESC[k]=m;
-    localStorage.setItem('esc:'+k,JSON.stringify(m));
-    return true;
-  }catch(e){
-    try{const s=localStorage.getItem('esc:'+k); if(s) ESC[k]=JSON.parse(s);}catch(_){}
-    return false;
+  const url=SCRIPT_URL+'?action=escala&loja='+encodeURIComponent(loja)+'&mes='+encodeURIComponent(mes);
+  for(let tentativa=1; tentativa<=2; tentativa++){
+    try{
+      const r=await fetchTO(url,{redirect:'follow'},25000);
+      const j=await r.json();
+      if(j && j.error) throw new Error(j.error);
+      const m={};
+      (j.escala||[]).forEach(l=>{m[l.vendedora]=l.dias||{};});
+      ESC[k]=m;
+      try{ localStorage.setItem('esc:'+k,JSON.stringify(m)); }catch(_){}
+      return true;
+    }catch(e){
+      if(tentativa===1){ await new Promise(r=>setTimeout(r,1500)); continue; }
+      try{ const g=localStorage.getItem('esc:'+k); ESC[k]= g?JSON.parse(g):{}; }catch(_){ ESC[k]={}; }
+      return false;
+    }
   }
 }
 async function post(payload){
@@ -621,7 +632,8 @@ function toast(t){
   clearTimeout(el._t); el._t=setTimeout(()=>el.classList.remove('on'),2600);
 }
 function marcarSujo(){
-  sujo=true; $('#btSalvar').disabled=false; $('#btSalvar').textContent='Salvar';
+  sujo=true;
+  if(carregouOk){ $('#btSalvar').disabled=false; $('#btSalvar').textContent='Salvar'; }
   try{ localStorage.setItem('esc:'+chave(),JSON.stringify(ESC[chave()]||{})); }catch(e){}
 }
 function mostrarTela(t){
@@ -642,12 +654,13 @@ function linhasParaSalvar(){
 }
 
 async function salvar(situacao){
+  if(!carregouOk){ toast('Sem conexão com a planilha — recarregue antes de salvar'); return; }
   const bt=$('#btSalvar'); bt.disabled=true; bt.textContent='Salvando…';
   const okp=await post({action:'saveEscala',loja:loja,mes:mes,linhas:linhasParaSalvar(),
                         situacao:situacao||null,por:'gerente'});
   if(situacao) STATUS[chave()]={situacao:situacao,atualizado:'agora',por:'gerente'};
   sujo=false; bt.textContent='Salvo'; bt.disabled=true;
-  renderSit();
+  renderSit(); travaSalvar();
   toast(okp?(situacao==='ENVIADA'?'Escala enviada para validação':'Escala salva'):'Sem conexão — guardado no celular');
   setTimeout(()=>{ carregarStatus().then(renderSit); },2500);
 }
@@ -661,9 +674,25 @@ function trocarMes(delta){
 }
 async function abrirMes(){
   $('#listaDias').innerHTML='<div class="vazio" style="margin:12px">carregando…</div>';
-  await carregarEscala();
-  sujo=false; $('#btSalvar').disabled=true; $('#btSalvar').textContent='Salvo';
+  carregouOk = await carregarEscala();
+  sujo=false;
   renderEscala();
+  travaSalvar();
+}
+
+// enquanto a escala do mês não tiver sido lida do servidor, NÃO deixa gravar:
+// salvar em cima de uma tela vazia apagaria a escala que está na planilha.
+function travaSalvar(){
+  const bs=$('#btSalvar'), be=$('#btEnviar'), av=$('#semFalha');
+  if(!carregouOk){
+    bs.disabled=true; bs.textContent='Sem conexão';
+    be.disabled=true; be.style.opacity=.45;
+    if(av) av.hidden=false;
+  }else{
+    be.disabled=false; be.style.opacity=1;
+    bs.disabled=!sujo; bs.textContent= sujo?'Salvar':'Salvo';
+    if(av) av.hidden=true;
+  }
 }
 
 document.addEventListener('DOMContentLoaded',init);
@@ -690,6 +719,10 @@ async function init(){
     salvar('ENVIADA');
   };
   $('#btAdmin').onclick=()=>mostrarTela('Cadastro');
+
+  document.addEventListener('click',e=>{
+    if(e.target && e.target.id==='btRecarregar') abrirMes();
+  });
 
   $('#vista').addEventListener('click',e=>{
     const b=e.target.closest('[data-v]'); if(!b) return;
