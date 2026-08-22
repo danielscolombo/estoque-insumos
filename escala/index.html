@@ -68,6 +68,9 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .dia.dom .dia-h .dow{color:var(--t-do-i);}
 .dia-h .num{font-size:1.15rem;font-weight:800;line-height:1;margin-right:auto;}
 .dia.dom .dia-h .num{color:var(--t-do-i);}
+.dia.fer{border-color:#A62A21;}
+.dia.fer .dia-h{background:#FDF3F2;}
+.dia-h .ferb{font-size:.58rem;font-weight:800;letter-spacing:.8px;background:#A62A21;color:#fff;border-radius:20px;padding:3px 9px;}
 .dia-h .cob{font-size:.68rem;color:var(--muted);background:#fff;border:1.5px solid var(--border);border-radius:20px;padding:2px 9px;font-weight:600;}
 .dia-h .cob b{font-size:.82rem;color:var(--text);font-weight:800;}
 .dia-h .rep{border:1.5px solid var(--border);background:#fff;border-radius:8px;padding:3px 8px;font-size:.66rem;font-weight:700;font-family:inherit;color:var(--primary);cursor:pointer;}
@@ -95,6 +98,10 @@ table.gr th{background:var(--pd);color:#fff;font-size:.62rem;font-weight:800;let
 table.gr th .dd{display:block;font-size:.86rem;font-weight:800;letter-spacing:0;margin-top:1px;}
 table.gr th.fora{background:#8A8290;}
 table.gr th.fora .dd{opacity:.5;}
+table.gr th.fer{background:#A62A21;}
+table.gr th .fe{display:block;font-size:.5rem;font-weight:800;letter-spacing:.8px;margin-top:2px;background:#FFD84D;color:#6B2018;border-radius:3px;padding:1px 0;}
+table.gr td.cel.fer{background:#FDF3F2;}
+table.gr tr.cob td.fer{background:#F7E3E1;color:#A62A21;}
 table.gr th.nm,table.gr td.nm{position:sticky;left:0;z-index:3;min-width:104px;max-width:104px;}
 table.gr th.nm{text-align:left;padding-left:9px;}
 table.gr td.nm{background:#F3EFF1;font-size:.7rem;font-weight:800;padding:0 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text);border-right:1.5px solid var(--border);}
@@ -325,6 +332,64 @@ function classeDe(l,val){
 const trabalha=(l,v)=>{const c=classeDe(l,v);return !!c&&c!=='FOLGA'&&c!=='AUSENCIA';};
 const ehFolga=(l,v)=>classeDe(l,v)==='FOLGA';
 
+// ═══════════════════════════════════════════════════
+// FERIADOS
+// Nacionais + estadual de SP + municipal da cidade da loja.
+// Móveis calculados a partir da Páscoa, então vale para qualquer ano.
+// ═══════════════════════════════════════════════════
+const CIDADE_LOJA={
+  'TUCURUVI':'SP','BOM RETIRO':'SP','PENHA':'SP','MOOCA':'SP','LAPA':'SP',
+  'MAUÁ':'MAUA','MAUA':'MAUA',
+  'SBC':'SBC',
+  'SCS':'SCS','SÃO CAETANO CENTRO':'SCS','SAO CAETANO CENTRO':'SCS'
+};
+
+function pascoa(a){                       // Meeus/Jones/Butcher
+  const A=a%19,B=Math.floor(a/100),C=a%100,D=Math.floor(B/4),E=B%4,
+        F=Math.floor((B+8)/25),G=Math.floor((B-F+1)/3),H=(19*A+B-D-G+15)%30,
+        I=Math.floor(C/4),K=C%4,L=(32+2*E+2*I-H-K)%7,
+        M=Math.floor((A+11*H+22*L)/451),
+        mm=Math.floor((H+L-7*M+114)/31), dd=((H+L-7*M+114)%31)+1;
+  return new Date(a,mm-1,dd);
+}
+
+// devolve { dia: 'Nome do feriado' } para o mês/loja pedidos
+function feriadosDoMes(ano,mesN,lojaNome){
+  const cid=CIDADE_LOJA[norm(lojaNome)]||'';
+  const map={};
+  const put=(dt,nome)=>{ if(dt.getFullYear()===ano && dt.getMonth()===mesN-1) map[dt.getDate()]=nome; };
+  const dia=(m,d)=>new Date(ano,m-1,d);
+
+  // nacionais
+  [[1,1,'Confraternização Universal'],[4,21,'Tiradentes'],[5,1,'Dia do Trabalho'],
+   [9,7,'Independência do Brasil'],[10,12,'N. Sra. Aparecida'],[11,2,'Finados'],
+   [11,15,'Proclamação da República'],[11,20,'Consciência Negra'],[12,25,'Natal']
+  ].forEach(f=>put(dia(f[0],f[1]),f[2]));
+
+  // móvel nacional
+  const p=pascoa(ano);
+  const sexta=new Date(p); sexta.setDate(p.getDate()-2); put(sexta,'Sexta-feira Santa');
+
+  // estadual de São Paulo
+  put(dia(7,9),'Revolução Constitucionalista');
+
+  // municipais
+  if(cid==='SP'){
+    put(dia(1,25),'Aniversário de São Paulo');
+    const cc=new Date(p); cc.setDate(p.getDate()+60); put(cc,'Corpus Christi');
+  }
+  if(cid==='SBC')  put(dia(8,20),'Aniversário de São Bernardo do Campo');
+  if(cid==='SCS')  put(dia(7,28),'Aniversário de São Caetano do Sul');
+  if(cid==='MAUA') put(dia(12,8),'Aniversário de Mauá');
+
+  return map;
+}
+
+function feriadosAtuais(){
+  const [a,m]=mes.split('-').map(Number);
+  return feriadosDoMes(a,m,loja);
+}
+
 function ativas(l){ return cadLoja(l).vendedoras.filter(v=>v.ativa!==false); }
 function diasNoMes(m){ const [a,b]=m.split('-').map(Number); return new Date(a,b,0).getDate(); }
 function dataDe(m,d){ const [a,b]=m.split('-').map(Number); return new Date(a,b-1,d); }
@@ -426,6 +491,7 @@ function renderEscala(){
 
   const nd=diasNoMes(mes), hoje=new Date();
   const ehHoje=d=>hoje.getFullYear()===ano&&hoje.getMonth()+1===mm&&hoje.getDate()===d;
+  const FER=feriadosAtuais();
   let h='', sem=0, ant=null;
   for(let d=1;d<=nd;d++){
     const dt=dataDe(mes,d), dw=dt.getDay();
@@ -433,8 +499,9 @@ function renderEscala(){
       sem++;
       h+='<div class="semdiv"><b>Semana '+sem+'</b><i></i><button data-limpar="'+sem+'">Limpar</button></div>';
     }
-    h+='<div class="dia'+(dw===0?' dom':'')+(ehHoje(d)?' hoje':'')+'" data-d="'+d+'" data-sem="'+sem+'">'+
+    h+='<div class="dia'+(dw===0?' dom':'')+(FER[d]?' fer':'')+(ehHoje(d)?' hoje':'')+'" data-d="'+d+'" data-sem="'+sem+'">'+
        '<div class="dia-h"><span class="dow">'+DOW[dw]+'</span><span class="num">'+d+'</span>'+
+       (FER[d]?'<span class="ferb" title="'+esc(FER[d])+'">FERIADO</span>':'')+
        '<span class="cob" data-cob="'+d+'"><b>·</b> na loja</span>'+
        (ant?'<button class="rep" data-rep="'+d+'" data-de="'+ant+'">repetir</button>':'')+
        '</div>';
@@ -482,6 +549,7 @@ function semanasDoMes(){
 function htmlGrade(vs){
   const hoje=new Date(), [a,m]=mes.split('-').map(Number);
   const ehHoje=d=>hoje.getFullYear()===a&&hoje.getMonth()+1===m&&hoje.getDate()===d;
+  const FER=feriadosDoMes(a,m,loja);
   return semanasDoMes().map((sem,si)=>{
     const noMes=sem.filter(d=>d.noMes);
     let h='<section class="sem" data-sem="'+(si+1)+'">';
@@ -490,8 +558,10 @@ function htmlGrade(vs){
        '<button data-limpar="'+(si+1)+'">Limpar</button></div>';
     h+='<div class="tbw"><table class="gr"><thead><tr><th class="nm">NOMES</th>';
     sem.forEach(d=>{
-      h+='<th class="'+(d.noMes?'':'fora')+'">'+DOW[d.dow]+
-         '<span class="dd">'+(d.noMes?pad(d.dia):'·')+'</span></th>';
+      const fh=d.noMes?FER[d.dia]:null;
+      h+='<th class="'+(d.noMes?'':'fora')+(fh?' fer':'')+'"'+(fh?' title="'+esc(fh)+'"':'')+'>'+DOW[d.dow]+
+         '<span class="dd">'+(d.noMes?pad(d.dia):'·')+'</span>'+
+         (fh?'<span class="fe">FERIADO</span>':'')+'</th>';
     });
     h+='</tr></thead><tbody>';
     vs.forEach(v=>{
@@ -499,13 +569,14 @@ function htmlGrade(vs){
       sem.forEach(d=>{
         if(!d.noMes){ h+='<td class="cel fora"><select class="g" disabled><option></option></select></td>'; return; }
         const val=valor(v.nome,d.dia);
-        h+='<td class="cel"><select class="g '+classeDe(loja,val)+'" data-v="'+esc(v.nome)+'" data-d="'+d.dia+'">'+opcoes(val,'')+'</select></td>';
+        h+='<td class="cel'+(FER[d.dia]?' fer':'')+'"><select class="g '+classeDe(loja,val)+'" data-v="'+esc(v.nome)+'" data-d="'+d.dia+'">'+opcoes(val,'')+'</select></td>';
       });
       h+='</tr>';
     });
     h+='<tr class="cob"><td class="nm">NA LOJA</td>';
     sem.forEach(d=>{
-      h+='<td'+(d.noMes?' data-cob="'+d.dia+'"':'')+'>'+(d.noMes?'<b>·</b>':'')+'</td>';
+      const fh=d.noMes?FER[d.dia]:null;
+      h+='<td'+(d.noMes?' data-cob="'+d.dia+'"':'')+(fh?' class="fer"':'')+'>'+(d.noMes?'<b>·</b>':'')+'</td>';
     });
     h+='</tr></tbody></table></div></section>';
     return h;
@@ -557,8 +628,13 @@ function renderLegenda(){
   if(c.ausencias.some(a=>norm(a.tipo)==='FOLGA')) it.push(['Folga','FOLGA']);
   if(c.ausencias.some(a=>norm(a.tipo)!=='FOLGA')) it.push(['Ausência','AUSENCIA']);
   const v={ABERTURA:'ab',INTERMEDIARIO:'in',FECHAMENTO:'fe',DOMINGO:'do',FOLGA:'fo',AUSENCIA:'au'};
-  $('#legenda').innerHTML=it.map(([r,t])=>
+  let h=it.map(([r,t])=>
     '<span class="lg" style="background:var(--t-'+v[t]+');color:var(--t-'+v[t]+'-i);border-color:var(--t-'+v[t]+'-b)">'+esc(r)+'</span>').join('');
+  const F=feriadosAtuais(), dias=Object.keys(F).map(Number).sort((x,y)=>x-y);
+  dias.forEach(d=>{
+    h+='<span class="lg" style="background:#A62A21;color:#fff;border-color:#7E1E17">'+pad(d)+' · '+esc(F[d])+'</span>';
+  });
+  $('#legenda').innerHTML=h;
 }
 
 // ═══════════════════════════════════════════════════
