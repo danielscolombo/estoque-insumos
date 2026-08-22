@@ -157,6 +157,9 @@ tr.tot td{background:#FAF8F9;font-weight:800;}
 .bt{border:1.5px solid var(--border);background:#fff;border-radius:9px;padding:8px 13px;font-size:.8rem;font-weight:700;font-family:inherit;cursor:pointer;color:var(--text);}
 .bt.p{background:var(--primary);border-color:var(--primary);color:#fff;}
 .vazio{padding:20px 12px;text-align:center;color:var(--muted);font-size:.82rem;border:1.5px dashed var(--border);border-radius:11px;margin:4px 0;}
+#semFalha{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+#semFalha[hidden]{display:none !important;}
+[hidden]{display:none !important;}
 .aviso{margin:12px 12px 0;padding:10px 12px;border-radius:11px;font-size:.8rem;line-height:1.45;background:#FEF3C7;border:1.5px solid #FCD34D;color:#92400E;}
 
 /* MODAL */
@@ -201,7 +204,7 @@ tr.tot td{background:#FAF8F9;font-weight:800;}
 <div class="scroll" id="scroll">
 
   <section id="scEscala">
-    <div class="aviso" id="semFalha" hidden style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+    <div class="aviso" id="semFalha" hidden>
       <b>Não consegui ler a escala deste mês.</b>
       <span>A tela pode estar em branco sem estar vazia de verdade. Salvar está bloqueado para não apagar o que já está gravado.</span>
       <button class="bt" id="btRecarregar">Tentar de novo</button>
