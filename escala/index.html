@@ -511,11 +511,23 @@ function htmlGrade(vs){
   }).join('');
 }
 
+// a planilha devolve a data crua ("Sat Aug 22 2026 08:56:00 GMT-0300 ...") — deixa legível
+function fmtData(v){
+  if(!v) return '';
+  const t=String(v).trim();
+  let m=t.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}:\d{2})/);
+  if(m) return m[3]+'/'+m[2]+' '+m[4];
+  const d=new Date(t);
+  if(!isNaN(d)) return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+
+                        ' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+  return t;
+}
+
 function renderSit(){
   const s=STATUS[chave()]||{situacao:'RASCUNHO'};
   const sit=['RASCUNHO','ENVIADA','VALIDADA'].indexOf(s.situacao)>=0?s.situacao:'RASCUNHO';
   $('#sitBox').innerHTML='<span class="pill '+sit+'">'+sit+'</span>'+
-    (s.atualizado?'<span class="quando">atualizada em '+esc(s.atualizado)+(s.por?' · '+esc(s.por):'')+'</span>':'')+
+    (s.atualizado?'<span class="quando">atualizada em '+esc(fmtData(s.atualizado))+(s.por?' · '+esc(s.por):'')+'</span>':'')+
     (admin&&sit==='ENVIADA'?'<button class="bt" id="btValidar" style="margin-left:auto">Validar</button>':'');
   const bv=$('#btValidar');
   if(bv) bv.onclick=async()=>{
