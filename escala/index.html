@@ -262,8 +262,8 @@ tr.tot td{background:#FAF8F9;font-weight:800;}
 
   <section id="scEscala">
     <div class="aviso" id="semFalha" hidden>
-      <b>Não consegui ler a escala deste mês.</b>
-      <span>A tela pode estar em branco sem estar vazia de verdade. Salvar está bloqueado para não apagar o que já está gravado.</span>
+      <b id="falhaT">Não consegui ler a escala deste mês.</b>
+      <span id="falhaS">A tela pode estar em branco sem estar vazia de verdade. Salvar está bloqueado para não apagar o que já está gravado.</span>
       <button class="bt" id="btRecarregar">Tentar de novo</button>
     </div>
     <div class="sit" id="sitBox"></div>
@@ -353,6 +353,7 @@ let STATUS={};              // { "loja|mes": {situacao, atualizado, por} }
 let loja='', mes='', sujo=false, tela='Escala', admin=false;
 let VISTA = localStorage.getItem('escVista') || 'grade';
 let carregouOk = true;
+let configOk = true;
 
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
@@ -460,14 +461,32 @@ function fetchTO(url,opts={},ms=12000){
   const t=setTimeout(()=>ctrl.abort(),ms);
   return fetch(url,{...opts,signal:ctrl.signal}).finally(()=>clearTimeout(t));
 }
+// o cadastro é a base de tudo: se ele não vier, a tela mostra "nenhuma
+// vendedora" e um Enviar gravaria uma escala vazia por cima da boa.
+// Por isso: 2 tentativas, cache local e bloqueio de gravação em caso de falha.
 async function carregarConfig(){
-  try{
-    const r=await fetchTO(SCRIPT_URL+'?action=config',{redirect:'follow'});
-    const j=await r.json();
-    if(j.lojas&&j.lojas.length) LOJAS=j.lojas;
-    if(j.cad) CAD=j.cad;
-  }catch(e){}
-  LOJAS.forEach(cadLoja);
+  for(let t=1;t<=2;t++){
+    try{
+      const r=await fetchTO(SCRIPT_URL+'?action=config',{redirect:'follow'},20000);
+      const j=await r.json();
+      if(j && j.error) throw new Error(j.error);
+      if(j.lojas&&j.lojas.length) LOJAS=j.lojas;
+      if(j.cad) CAD=j.cad;
+      configOk=true;
+      try{ localStorage.setItem('escCfg',JSON.stringify({lojas:LOJAS,cad:CAD})); }catch(_){}
+      LOJAS.forEach(cadLoja);
+      return true;
+    }catch(e){
+      if(t===1){ await new Promise(r=>setTimeout(r,1500)); continue; }
+      configOk=false;
+      try{
+        const g=JSON.parse(localStorage.getItem('escCfg')||'null');
+        if(g&&g.lojas&&g.lojas.length){ LOJAS=g.lojas; CAD=g.cad||{}; }
+      }catch(_){}
+      LOJAS.forEach(cadLoja);
+      return false;
+    }
+  }
 }
 async function carregarStatus(){
   try{
@@ -532,7 +551,9 @@ function renderEscala(){
   const vs=ativas(loja);
   const alvo=$('#listaDias');
   if(!vs.length){
-    alvo.innerHTML='<div class="vazio" style="margin:12px">Nenhuma vendedora cadastrada nesta loja.<br>Peça ao gestor para cadastrar.</div>';
+    alvo.innerHTML='<div class="vazio" style="margin:12px">'+(configOk
+      ? 'Nenhuma vendedora cadastrada nesta loja.<br>Peça ao gestor para cadastrar.'
+      : 'Não consegui ler o cadastro.<br>Recarregue a página — a escala não está vazia.')+'</div>';
     $('#legenda').innerHTML=''; return;
   }
 
@@ -908,6 +929,9 @@ function linhasParaSalvar(){
 
 async function salvar(situacao){
   if(!carregouOk){ toast('Sem conexão com a planilha — recarregue antes de salvar'); return; }
+  if(!configOk){ toast('Cadastro não carregou — recarregue antes de gravar'); return; }
+  // trava dura: lista de vendedoras vazia NUNCA grava, apagaria o mês inteiro
+  if(!ativas(loja).length){ toast('Sem vendedoras carregadas — não vou gravar por cima da escala'); return; }
   if(bloqueada()){ toast('Escala validada — peça ao gestor para reabrir'); return; }
   const bt=$('#btSalvar'); bt.disabled=true; bt.textContent='Salvando…';
   const okp=await post({action:'saveEscala',loja:loja,mes:mes,linhas:linhasParaSalvar(),
@@ -938,10 +962,23 @@ async function abrirMes(){
 // salvar em cima de uma tela vazia apagaria a escala que está na planilha.
 function travaSalvar(){
   const bs=$('#btSalvar'), be=$('#btEnviar'), av=$('#semFalha');
-  if(!carregouOk){
+  const semRoteiro = !configOk || !ativas(loja).length;
+  if(!carregouOk || semRoteiro){
     bs.disabled=true; bs.textContent='Sem conexão';
-    be.disabled=true; be.style.opacity=.45;
-    if(av) av.hidden=false;
+    be.disabled=true; be.style.opacity=.45; be.hidden=false;
+    if(av){
+      av.hidden=false;
+      if(!configOk){
+        $('#falhaT').textContent='Não consegui ler o cadastro das lojas.';
+        $('#falhaS').textContent='Por isso a tela aparece sem vendedoras. Não está vazio de verdade — gravar está bloqueado para não apagar a escala que já existe.';
+      }else if(!carregouOk){
+        $('#falhaT').textContent='Não consegui ler a escala deste mês.';
+        $('#falhaS').textContent='A tela pode estar em branco sem estar vazia de verdade. Salvar está bloqueado para não apagar o que já está gravado.';
+      }else{
+        $('#falhaT').textContent='Nenhuma vendedora ativa nesta loja.';
+        $('#falhaS').textContent='Cadastre a equipe em Cadastro antes de montar a escala. Gravar está bloqueado.';
+      }
+    }
     return;
   }
   if(av) av.hidden=true;
@@ -954,6 +991,11 @@ function travaSalvar(){
   bs.disabled=!sujo; bs.textContent= sujo?'Salvar':'Salvo';
 }
 
+function atualizarSelLoja(){
+  if(!loja||LOJAS.indexOf(loja)<0) loja=LOJAS[0]||'';
+  $('#selLoja').innerHTML=LOJAS.map(l=>'<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+esc(l)+'</option>').join('');
+}
+
 document.addEventListener('DOMContentLoaded',init);
 
 async function init(){
@@ -963,8 +1005,7 @@ async function init(){
 
   LOJAS.forEach(cadLoja);
   await carregarConfig();
-  if(!loja||LOJAS.indexOf(loja)<0) loja=LOJAS[0];
-  $('#selLoja').innerHTML=LOJAS.map(l=>'<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+esc(l)+'</option>').join('');
+  atualizarSelLoja();
   await carregarStatus();
   await abrirMes();
 
@@ -980,7 +1021,15 @@ async function init(){
   $('#btAdmin').onclick=()=>mostrarTela('Cadastro');
 
   document.addEventListener('click',e=>{
-    if(e.target && e.target.id==='btRecarregar') abrirMes();
+    if(e.target && e.target.id==='btRecarregar'){
+      (async()=>{
+        e.target.disabled=true; e.target.textContent='Tentando…';
+        if(!configOk){ await carregarConfig(); atualizarSelLoja(); }
+        await carregarStatus();
+        await abrirMes();
+        e.target.disabled=false; e.target.textContent='Tentar de novo';
+      })();
+    }
   });
 
   $('#vista').addEventListener('click',e=>{
