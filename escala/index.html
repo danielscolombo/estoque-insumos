@@ -53,48 +53,52 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--
 .sit .quando{font-size:.72rem;color:var(--muted);}
 .sit-dir{margin-left:auto;display:flex;gap:6px;}
 
-/* ───────── FOLHA DE IMPRESSÃO / PDF ───────── */
+/* ───────── FOLHA DE IMPRESSÃO / PDF ─────────
+   Estilos fora do @media print de propósito: o gerarPDF() precisa
+   medir a folha com o layout real para calcular a escala de redução. */
 #impressao{display:none;}
+#impressao.medindo{display:block;position:fixed;left:-30000px;top:0;z-index:-1;}
+#impressao{width:281mm;height:194mm;overflow:hidden;background:#fff;
+  font-family:'Segoe UI',system-ui,sans-serif;color:#1F1620;}
+#folha{transform-origin:top left;width:281mm;}
+.pr-cab{display:flex;align-items:flex-end;gap:14px;border-bottom:2pt solid #4E1B30;padding-bottom:4px;margin-bottom:6px;}
+.pr-t{font-size:13pt;font-weight:800;letter-spacing:1.5px;color:#4E1B30;line-height:1.1;}
+.pr-s{font-size:9pt;font-weight:700;color:#6B6470;margin-top:1px;}
+.pr-sel{margin-left:auto;text-align:right;font-size:7.5pt;font-weight:800;letter-spacing:1px;color:#15803D;
+        border:1pt solid #86EFAC;background:#DCFCE7;border-radius:3px;padding:3px 8px;}
+.pr-sel small{display:block;font-weight:600;letter-spacing:0;color:#4B7A5A;font-size:6.5pt;margin-top:1px;}
+.pr-wrap{display:grid;grid-template-columns:1fr 1fr;gap:5px 9px;align-items:start;}
+.pr-bl{break-inside:avoid;}
+.pr-sem{font-size:6.5pt;font-weight:800;letter-spacing:1.1px;color:#6B6470;margin-bottom:1px;}
+table.pr-gr{width:100%;border-collapse:collapse;table-layout:fixed;}
+table.pr-gr th,table.pr-gr td{border:.5pt solid #B9AFB6;padding:2px 1px;text-align:center;
+        font-size:6.4pt;font-weight:600;word-break:break-word;line-height:1.15;}
+table.pr-gr th{background:#4E1B30;color:#fff;font-size:5.6pt;font-weight:800;letter-spacing:.4px;padding:2px 1px;}
+table.pr-gr th b{display:block;font-size:8pt;}
+table.pr-gr th i{display:block;font-style:normal;font-size:4.6pt;background:#FFD84D;color:#6B2018;
+        border-radius:2px;margin-top:1px;font-weight:800;letter-spacing:.3px;}
+table.pr-gr th.fer{background:#A62A21;}
+table.pr-gr th.dom{background:#6B2544;}
+table.pr-gr th.fora,table.pr-gr td.fora{background:#E9E5E7;color:#9A929A;}
+table.pr-gr th.nm,table.pr-gr td.nm{width:19%;text-align:left;padding-left:4px;font-weight:800;}
+table.pr-gr td.nm{background:#F3EFF1;font-size:6.2pt;}
+table.pr-gr td.ABERTURA{background:#FDF3DC;}
+table.pr-gr td.INTERMEDIARIO{background:#EFEBFA;}
+table.pr-gr td.FECHAMENTO{background:#E4F1F7;}
+table.pr-gr td.DOMINGO{background:#FBE7F0;}
+table.pr-gr td.FOLGA{background:#FFD84D;font-weight:800;}
+table.pr-gr td.AUSENCIA{background:#E4E0E2;font-weight:800;}
+table.pr-gr td.fer{box-shadow:inset 0 0 0 .8pt #A62A21;}
+table.pr-gr tr.cob td{background:#F3EFF1;font-weight:800;font-size:6.6pt;}
+.pr-rod{display:flex;gap:22px;font-size:6.4pt;line-height:1.45;color:#4A424C;margin-top:7px;
+        border-top:.6pt solid #B9AFB6;padding-top:5px;}
+.pr-rod b{font-size:5.6pt;letter-spacing:1px;color:#6B6470;display:block;margin-bottom:1px;}
 @media print{
   @page{size:A4 landscape;margin:8mm;}
   html,body{background:#fff !important;height:auto !important;overflow:visible !important;}
   body>*{display:none !important;}
-  body>#impressao{display:block !important;}
+  body>#impressao{display:block !important;position:static !important;}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
-  #impressao{font-family:'Segoe UI',system-ui,sans-serif;color:#1F1620;}
-  .pr-cab{display:flex;align-items:flex-end;gap:14px;border-bottom:2.5px solid #4E1B30;padding-bottom:6px;margin-bottom:9px;}
-  .pr-t{font-size:15pt;font-weight:800;letter-spacing:1.5px;color:#4E1B30;}
-  .pr-s{font-size:10.5pt;font-weight:700;color:#6B6470;margin-top:2px;}
-  .pr-sel{margin-left:auto;text-align:right;font-size:8pt;font-weight:800;letter-spacing:1px;color:#15803D;
-          border:1.5px solid #86EFAC;background:#DCFCE7;border-radius:4px;padding:4px 9px;}
-  .pr-sel small{display:block;font-weight:600;letter-spacing:0;color:#4B7A5A;font-size:7pt;margin-top:1px;}
-  .pr-bl{page-break-inside:avoid;margin-bottom:8px;}
-  .pr-sem{font-size:7.5pt;font-weight:800;letter-spacing:1.2px;color:#6B6470;margin-bottom:2px;}
-  table.pr-gr,table.pr-ass{width:100%;border-collapse:collapse;table-layout:fixed;}
-  table.pr-gr th,table.pr-gr td,table.pr-ass td{border:.6pt solid #B9AFB6;padding:3px 2px;text-align:center;
-          font-size:7.5pt;font-weight:600;word-break:break-word;}
-  table.pr-gr th{background:#4E1B30;color:#fff;font-size:6.5pt;font-weight:800;letter-spacing:.5px;}
-  table.pr-gr th b{display:block;font-size:10pt;margin-top:1px;}
-  table.pr-gr th i{display:block;font-style:normal;font-size:5.5pt;background:#FFD84D;color:#6B2018;
-          border-radius:2px;margin-top:1px;font-weight:800;}
-  table.pr-gr th.fer{background:#A62A21;}
-  table.pr-gr th.dom{background:#6B2544;}
-  table.pr-gr th.fora,table.pr-gr td.fora{background:#E9E5E7;color:#9A929A;}
-  table.pr-gr th.nm,table.pr-gr td.nm,table.pr-ass td.nm{width:15%;text-align:left;padding-left:6px;font-weight:800;}
-  table.pr-gr td.nm{background:#F3EFF1;font-size:7.5pt;}
-  table.pr-gr td.ABERTURA{background:#FDF3DC;}
-  table.pr-gr td.INTERMEDIARIO{background:#EFEBFA;}
-  table.pr-gr td.FECHAMENTO{background:#E4F1F7;}
-  table.pr-gr td.DOMINGO{background:#FBE7F0;}
-  table.pr-gr td.FOLGA{background:#FFD84D;font-weight:800;}
-  table.pr-gr td.AUSENCIA{background:#E4E0E2;font-weight:800;}
-  table.pr-gr td.fer{box-shadow:inset 0 0 0 1pt #A62A21;}
-  table.pr-gr tr.cob td{background:#F3EFF1;font-weight:800;font-size:8pt;}
-  .pr-rod{display:flex;gap:26px;font-size:7.5pt;line-height:1.5;color:#4A424C;margin:10px 0 12px;
-          border-top:.8pt solid #B9AFB6;padding-top:7px;page-break-inside:avoid;}
-  .pr-rod b{font-size:6.5pt;letter-spacing:1px;color:#6B6470;}
-  table.pr-ass td{height:26px;text-align:left;padding-left:6px;font-size:7pt;color:#9A929A;font-weight:600;}
-  table.pr-ass td.nm{color:#1F1620;font-size:8pt;}
 }
 
 /* SEMANA */
@@ -354,6 +358,7 @@ let loja='', mes='', sujo=false, tela='Escala', admin=false;
 let VISTA = localStorage.getItem('escVista') || 'grade';
 let carregouOk = true;
 let configOk = true;
+let SENHA_SESSAO = '';
 
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
@@ -517,10 +522,56 @@ async function carregarEscala(){
   }
 }
 async function post(payload){
+  const corpo=JSON.stringify(
+    (admin&&SENHA_SESSAO) ? Object.assign({},payload,{senha:SENHA_SESSAO}) : payload);
   try{
-    await fetchTO(SCRIPT_URL,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)},18000);
+    // text/plain evita o preflight que o Apps Script não sabe responder,
+    // e assim dá para LER se a gravação deu certo
+    const r=await fetchTO(SCRIPT_URL,{method:'POST',redirect:'follow',
+              headers:{'Content-Type':'text/plain;charset=utf-8'},body:corpo},20000);
+    const j=await r.json();
+    if(j && j.success===false){ toast(j.error||'Gravação recusada pelo servidor'); return false; }
+    return true;
+  }catch(e){
+    // navegador bloqueou a leitura: manda às cegas, como era antes
+    try{ await fetchTO(SCRIPT_URL,{method:'POST',mode:'no-cors',body:corpo},18000); return true; }
+    catch(_){ return false; }
+  }
+}
+
+// uma viagem só: cadastro + status + escala. Cai para as três chamadas
+// separadas se o Apps Script ainda for a versão antiga.
+async function carregarTudo(){
+  try{
+    const url=SCRIPT_URL+'?action=tudo&loja='+encodeURIComponent(loja)+'&mes='+encodeURIComponent(mes);
+    const r=await fetchTO(url,{redirect:'follow'},22000);
+    const j=await r.json();
+    if(!j || j.error) throw new Error((j&&j.error)||'sem resposta');
+    if(!j.config || !j.escala) throw new Error('versao antiga');
+    const cfg=j.config;
+    if(cfg.lojas&&cfg.lojas.length) LOJAS=cfg.lojas;
+    if(cfg.cad) CAD=cfg.cad;
+    configOk=true;
+    try{ localStorage.setItem('escCfg',JSON.stringify({lojas:LOJAS,cad:CAD})); }catch(_){}
+    LOJAS.forEach(cadLoja);
+    STATUS={}; (j.status||[]).forEach(x=>{STATUS[x.loja+'|'+x.mes]=x;});
+    const m={}; (j.escala||[]).forEach(l=>{m[l.vendedora]=l.dias||{};});
+    ESC[chave()]=m;
+    try{ localStorage.setItem('esc:'+chave(),JSON.stringify(m)); }catch(_){}
     return true;
   }catch(e){ return false; }
+}
+
+// quem manda na senha é o servidor; sem resposta dele, confere local
+async function conferirSenha(v){
+  try{
+    const r=await fetchTO(SCRIPT_URL,{method:'POST',redirect:'follow',
+              headers:{'Content-Type':'text/plain;charset=utf-8'},
+              body:JSON.stringify({action:'login',senha:v})},20000);
+    const j=await r.json();
+    if(j && j.action==='login') return !!j.success;
+  }catch(e){}
+  return v===senhaAtual();
 }
 
 // ═══════════════════════════════════════════════════
@@ -605,6 +656,7 @@ function htmlImpressao(){
         '<div class="pr-s">'+esc(loja)+' &nbsp;·&nbsp; '+MESES[m-1]+' '+a+'</div></div>'+
         '<div class="pr-sel">VALIDADA<small>'+esc(fmtData(s.atualizado||''))+'</small></div></div>';
 
+  h+='<div class="pr-wrap">';
   semanasDoMes().forEach((sem,si)=>{
     const noMes=sem.filter(d=>d.noMes);
     h+='<div class="pr-bl"><div class="pr-sem">SEMANA '+(si+1)+' &nbsp;·&nbsp; '+
@@ -634,29 +686,36 @@ function htmlImpressao(){
     });
     h+='</tr></tbody></table></div>';
   });
+  h+='</div>';
 
-  // legenda de turnos e feriados do mês
-  h+='<div class="pr-rod"><div><b>TURNOS</b><br>'+
+  h+='<div class="pr-rod"><div><b>TURNOS</b>'+
      c.turnos.map(t=>esc(rot(t))+' &nbsp;'+esc((ROT_TIPO[norm(t.tipo)]||t.tipo).toLowerCase())).join('<br>')+'</div>';
   const dias=Object.keys(FER).map(Number).sort((x,y)=>x-y);
-  h+='<div><b>FERIADOS DO MÊS</b><br>'+
+  h+='<div><b>FERIADOS DO MÊS</b>'+
      (dias.length?dias.map(d=>pad(d)+'/'+pad(m)+' &nbsp;'+esc(FER[d])).join('<br>'):'nenhum')+'</div></div>';
-
-  // ciente das colaboradoras
-  h+='<div class="pr-bl"><div class="pr-sem">CIENTE DA ESCALA &nbsp;·&nbsp; '+
-     esc(loja)+' &nbsp;·&nbsp; '+MESES[m-1]+' '+a+'</div><table class="pr-ass"><tbody>';
-  vs.forEach(v=>{ h+='<tr><td class="nm">'+esc(v.nome)+'</td><td>Assinatura</td><td>Data</td></tr>'; });
-  h+='</tbody></table></div>';
 
   return h;
 }
 
+const MM=96/25.4;                              // 1mm em pixels de tela
 function gerarPDF(){
-  const el=$('#impressao');
-  el.innerHTML=htmlImpressao();
+  const box=$('#impressao'), fo=$('#folha');
+  fo.style.transform='none';
+  fo.innerHTML=htmlImpressao();
+
+  // mede a folha com o layout real e reduz o quanto for preciso
+  // para tudo caber em UMA página A4 deitada
+  box.classList.add('medindo');
+  const alvoH=194*MM, alvoW=281*MM;
+  const h=fo.scrollHeight, w=fo.scrollWidth;
+  let k=Math.min(alvoW/(w||1), alvoH/(h||1), 1);
+  if(k<1) k=Math.max(k*0.985,0.3);
+  fo.style.transform='scale('+k+')';
+  box.classList.remove('medindo');
+
   const antes=document.title;
   document.title='Escala '+loja+' '+mes;      // vira o nome do arquivo
-  setTimeout(()=>{ window.print(); document.title=antes; },60);
+  setTimeout(()=>{ window.print(); document.title=antes; },80);
 }
 
 function avisoTrava(){
@@ -1004,10 +1063,18 @@ async function init(){
   loja=localStorage.getItem('escLoja')||'';
 
   LOJAS.forEach(cadLoja);
-  await carregarConfig();
-  atualizarSelLoja();
-  await carregarStatus();
-  await abrirMes();
+  const lojaPedida=loja;
+  if(await carregarTudo()){
+    atualizarSelLoja();
+    // se a loja guardada não existe mais, a escala lida não serve
+    if(loja!==lojaPedida){ await abrirMes(); }
+    else{ carregouOk=true; sujo=false; renderEscala(); travaSalvar(); }
+  }else{
+    await carregarConfig();
+    atualizarSelLoja();
+    await carregarStatus();
+    await abrirMes();
+  }
 
   $('#selLoja').onchange=e=>{ loja=e.target.value; localStorage.setItem('escLoja',loja); abrirMes(); if(tela==='Cadastro') renderCadastro(); };
   $('#mAnt').onclick=()=>trocarMes(-1);
@@ -1090,8 +1157,14 @@ async function init(){
 
   // ── cadastro
   $('#btEntrar').onclick=()=>{
-    if($('#inSenha').value===senhaAtual()){ admin=true; $('#inSenha').value=''; renderCadastro(); renderEscala(); travaSalvar(); }
-    else toast('Senha incorreta');
+    (async()=>{
+      const v=$('#inSenha').value; const bt=$('#btEntrar');
+      bt.disabled=true; bt.textContent='Conferindo…';
+      const ok=await conferirSenha(v);
+      bt.disabled=false; bt.textContent='Entrar';
+      if(ok){ admin=true; SENHA_SESSAO=v; $('#inSenha').value=''; renderCadastro(); renderEscala(); travaSalvar(); }
+      else{ toast('Senha incorreta'); }
+    })();
   };
   $('#inSenha').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#btEntrar').click(); });
 
@@ -1142,6 +1215,6 @@ async function init(){
   window.addEventListener('beforeunload',e=>{ if(sujo){ e.preventDefault(); e.returnValue=''; } });
 }
 </script>
-<div id="impressao"></div>
+<div id="impressao"><div id="folha"></div></div>
 </body>
 </html>
