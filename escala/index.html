@@ -109,6 +109,11 @@ table.gr td.cel{min-width:96px;padding:2px;background:#fff;}
 table.gr td.cel.fora{background:#EDE9EB;}
 table.gr select.g{width:100%;border:1px solid transparent;background:transparent;color:var(--muted);border-radius:6px;padding:7px 2px;font-size:.72rem;font-family:inherit;font-weight:600;text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;cursor:pointer;}
 table.gr select.g:disabled{opacity:.3;cursor:default;}
+table.gr td.cel:not(.fora) select.g:disabled{opacity:1;cursor:default;}
+.trava{font-size:.66rem;font-weight:800;letter-spacing:.4px;color:#6B4A00;background:#FFF3C4;border:1.5px solid #E8CF6B;border-radius:20px;padding:2px 9px;}
+.bt-ghost{background:#fff !important;color:var(--primary) !important;border:1.5px solid var(--primary) !important;}
+.avisoTrava{margin:0 12px 10px;padding:9px 12px;background:#F4EFF1;border:1.5px solid var(--border);border-radius:11px;font-size:.74rem;color:var(--muted);line-height:1.45;}
+.avisoTrava b{color:var(--text);}
 table.gr select.g.ABERTURA{background:var(--t-ab);color:var(--t-ab-i);}
 table.gr select.g.INTERMEDIARIO{background:var(--t-in);color:var(--t-in-i);}
 table.gr select.g.FECHAMENTO{background:var(--t-fe);color:var(--t-fe-i);}
@@ -487,35 +492,45 @@ function renderEscala(){
   }
 
   $$('#vista button').forEach(b=>b.classList.toggle('on', b.dataset.v===VISTA));
-  if(VISTA==='grade'){ alvo.innerHTML=htmlGrade(vs); atualizar(); renderLegenda(); return; }
+  if(VISTA==='grade'){ alvo.innerHTML=avisoTrava()+htmlGrade(vs); atualizar(); renderLegenda(); return; }
 
   const nd=diasNoMes(mes), hoje=new Date();
   const ehHoje=d=>hoje.getFullYear()===ano&&hoje.getMonth()+1===mm&&hoje.getDate()===d;
   const FER=feriadosAtuais();
+  const BLOQ=bloqueada();
   let h='', sem=0, ant=null;
   for(let d=1;d<=nd;d++){
     const dt=dataDe(mes,d), dw=dt.getDay();
     if(d===1||dw===0){
       sem++;
-      h+='<div class="semdiv"><b>Semana '+sem+'</b><i></i><button data-limpar="'+sem+'">Limpar</button></div>';
+      h+='<div class="semdiv"><b>Semana '+sem+'</b><i></i>'+(BLOQ?'':'<button data-limpar="'+sem+'">Limpar</button>')+'</div>';
     }
     h+='<div class="dia'+(dw===0?' dom':'')+(FER[d]?' fer':'')+(ehHoje(d)?' hoje':'')+'" data-d="'+d+'" data-sem="'+sem+'">'+
        '<div class="dia-h"><span class="dow">'+DOW[dw]+'</span><span class="num">'+d+'</span>'+
        (FER[d]?'<span class="ferb" title="'+esc(FER[d])+'">FERIADO</span>':'')+
        '<span class="cob" data-cob="'+d+'"><b>·</b> na loja</span>'+
-       (ant?'<button class="rep" data-rep="'+d+'" data-de="'+ant+'">repetir</button>':'')+
+       (ant&&!BLOQ?'<button class="rep" data-rep="'+d+'" data-de="'+ant+'">repetir</button>':'')+
        '</div>';
     vs.forEach(v=>{
       const val=valor(v.nome,d);
       h+='<div class="ln"><span>'+esc(v.nome)+'</span>'+
-         '<select class="'+classeDe(loja,val)+'" data-v="'+esc(v.nome)+'" data-d="'+d+'">'+opcoes(val)+'</select></div>';
+         '<select class="'+classeDe(loja,val)+'"'+(BLOQ?' disabled':'')+' data-v="'+esc(v.nome)+'" data-d="'+d+'">'+opcoes(val)+'</select></div>';
     });
     h+='</div>';
     ant=d;
   }
-  alvo.innerHTML=h;
+  alvo.innerHTML=avisoTrava()+h;
   atualizar();
   renderLegenda();
+}
+
+function avisoTrava(){
+  const sit=sitDo();
+  if(sit==='VALIDADA' && !admin)
+    return '<div class="avisoTrava">🔒 <b>Escala validada.</b> Já foi conferida e fechada pelo gestor, então não pode mais ser alterada. Se precisar corrigir alguma coisa, fale com ele para reabrir o mês.</div>';
+  if(sit==='VALIDADA' && admin)
+    return '<div class="avisoTrava">🔓 <b>Escala validada — você está com o acesso de gestor.</b> A gerente não consegue mexer. Se alterar aqui, salve em seguida; para devolver o mês para ela, use <b>Reabrir</b>.</div>';
+  return '';
 }
 
 // ── grade: uma tabela por semana, domingo a sábado, igual ao modelo
@@ -550,12 +565,13 @@ function htmlGrade(vs){
   const hoje=new Date(), [a,m]=mes.split('-').map(Number);
   const ehHoje=d=>hoje.getFullYear()===a&&hoje.getMonth()+1===m&&hoje.getDate()===d;
   const FER=feriadosDoMes(a,m,loja);
+  const BLOQ=bloqueada();
   return semanasDoMes().map((sem,si)=>{
     const noMes=sem.filter(d=>d.noMes);
     let h='<section class="sem" data-sem="'+(si+1)+'">';
     h+='<div class="sem-top"><b>Semana '+(si+1)+'</b><span>'+noMes[0].dia+' a '+noMes[noMes.length-1].dia+'</span>'+
-       (si>0?'<button data-repsem="'+(si+1)+'">Repetir anterior</button>':'')+
-       '<button data-limpar="'+(si+1)+'">Limpar</button></div>';
+       (BLOQ?'':((si>0?'<button data-repsem="'+(si+1)+'">Repetir anterior</button>':'')+
+       '<button data-limpar="'+(si+1)+'">Limpar</button>'))+'</div>';
     h+='<div class="tbw"><table class="gr"><thead><tr><th class="nm">NOMES</th>';
     sem.forEach(d=>{
       const fh=d.noMes?FER[d.dia]:null;
@@ -569,7 +585,7 @@ function htmlGrade(vs){
       sem.forEach(d=>{
         if(!d.noMes){ h+='<td class="cel fora"><select class="g" disabled><option></option></select></td>'; return; }
         const val=valor(v.nome,d.dia);
-        h+='<td class="cel'+(FER[d.dia]?' fer':'')+'"><select class="g '+classeDe(loja,val)+'" data-v="'+esc(v.nome)+'" data-d="'+d.dia+'">'+opcoes(val,'')+'</select></td>';
+        h+='<td class="cel'+(FER[d.dia]?' fer':'')+'"><select class="g '+classeDe(loja,val)+'"'+(BLOQ?' disabled':'')+' data-v="'+esc(v.nome)+'" data-d="'+d.dia+'">'+opcoes(val,'')+'</select></td>';
       });
       h+='</tr>';
     });
@@ -595,20 +611,45 @@ function fmtData(v){
   return t;
 }
 
+// situação do mês aberto e trava de edição
+function sitDo(){
+  const s=STATUS[chave()];
+  const v=s&&s.situacao;
+  return ['RASCUNHO','ENVIADA','VALIDADA'].indexOf(v)>=0?v:'RASCUNHO';
+}
+// validada = fechada. Só o gestor (senha no Cadastro) mexe.
+function bloqueada(){ return sitDo()==='VALIDADA' && !admin; }
+
+async function mudarSit(nova,quem,aviso){
+  STATUS[chave()]={situacao:nova,atualizado:'agora',por:quem};
+  renderEscala(); travaSalvar(); toast(aviso);
+  await post({action:'setStatus',loja:loja,mes:mes,situacao:nova,por:quem});
+  carregarStatus().then(()=>{ renderSit(); });
+}
+
 function renderSit(){
   const s=STATUS[chave()]||{situacao:'RASCUNHO'};
-  const sit=['RASCUNHO','ENVIADA','VALIDADA'].indexOf(s.situacao)>=0?s.situacao:'RASCUNHO';
-  $('#sitBox').innerHTML='<span class="pill '+sit+'">'+sit+'</span>'+
-    (s.atualizado?'<span class="quando">atualizada em '+esc(fmtData(s.atualizado))+(s.por?' · '+esc(s.por):'')+'</span>':'')+
-    (admin&&sit==='ENVIADA'?'<button class="bt" id="btValidar" style="margin-left:auto">Validar</button>':'');
+  const sit=sitDo();
+  let h='<span class="pill '+sit+'">'+sit+'</span>'+
+    (s.atualizado?'<span class="quando">atualizada em '+esc(fmtData(s.atualizado))+(s.por?' · '+esc(s.por):'')+'</span>':'');
+  if(sit==='VALIDADA' && !admin) h+='<span class="trava">🔒 fechada</span>';
+  if(admin && sit!=='VALIDADA')  h+='<button class="bt" id="btValidar" style="margin-left:auto">Validar</button>';
+  if(admin && sit==='VALIDADA')  h+='<button class="bt bt-ghost" id="btReabrir" style="margin-left:auto">Reabrir</button>';
+  $('#sitBox').innerHTML=h;
+
   const bv=$('#btValidar');
   if(bv) bv.onclick=async()=>{
-    STATUS[chave()]={situacao:'VALIDADA',atualizado:'agora',por:'gestor'};
-    renderSit(); toast('Escala validada');
-    await post({action:'setStatus',loja:loja,mes:mes,situacao:'VALIDADA',por:'gestor'});
-    carregarStatus().then(renderSit);
+    if(sujo){ toast('Salve as alterações antes de validar'); return; }
+    await mudarSit('VALIDADA','gestor','Escala validada e fechada');
   };
-  $('#btEnviar').textContent = sit==='RASCUNHO' ? 'Enviar' : 'Reenviar';
+  const br=$('#btReabrir');
+  if(br) br.onclick=async()=>{
+    await mudarSit('ENVIADA','gestor','Escala reaberta para alteração');
+  };
+
+  const be=$('#btEnviar');
+  be.textContent = sit==='RASCUNHO' ? 'Enviar' : (sit==='VALIDADA' ? 'Validada' : 'Reenviar');
+  be.hidden = bloqueada();
 }
 
 function atualizar(){
@@ -747,6 +788,7 @@ function linhasParaSalvar(){
 
 async function salvar(situacao){
   if(!carregouOk){ toast('Sem conexão com a planilha — recarregue antes de salvar'); return; }
+  if(bloqueada()){ toast('Escala validada — peça ao gestor para reabrir'); return; }
   const bt=$('#btSalvar'); bt.disabled=true; bt.textContent='Salvando…';
   const okp=await post({action:'saveEscala',loja:loja,mes:mes,linhas:linhasParaSalvar(),
                         situacao:situacao||null,por:'gerente'});
@@ -780,11 +822,16 @@ function travaSalvar(){
     bs.disabled=true; bs.textContent='Sem conexão';
     be.disabled=true; be.style.opacity=.45;
     if(av) av.hidden=false;
-  }else{
-    be.disabled=false; be.style.opacity=1;
-    bs.disabled=!sujo; bs.textContent= sujo?'Salvar':'Salvo';
-    if(av) av.hidden=true;
+    return;
   }
+  if(av) av.hidden=true;
+  if(bloqueada()){                         // validada: fechada para a gerente
+    bs.disabled=true; bs.textContent='🔒 Validada';
+    be.hidden=true;
+    return;
+  }
+  be.hidden=false; be.disabled=false; be.style.opacity=1;
+  bs.disabled=!sujo; bs.textContent= sujo?'Salvar':'Salvo';
 }
 
 document.addEventListener('DOMContentLoaded',init);
@@ -823,12 +870,14 @@ async function init(){
 
   // ── célula da escala
   $('#listaDias').addEventListener('change',e=>{
+    if(bloqueada()){ renderEscala(); toast('Escala validada — não pode ser alterada'); return; }
     const s=e.target.closest('select[data-v]'); if(!s) return;
     setValor(s.dataset.v,+s.dataset.d,s.value);
     s.className=(VISTA==='grade'?'g ':'')+classeDe(loja,s.value);
     atualizar(); marcarSujo();
   });
   $('#listaDias').addEventListener('click',e=>{
+    if(bloqueada()) return;
     const rep=e.target.closest('[data-rep]');
     if(rep){
       const para=+rep.dataset.rep, de=+rep.dataset.de;
@@ -872,7 +921,7 @@ async function init(){
 
   // ── cadastro
   $('#btEntrar').onclick=()=>{
-    if($('#inSenha').value===senhaAtual()){ admin=true; $('#inSenha').value=''; renderCadastro(); renderSit(); }
+    if($('#inSenha').value===senhaAtual()){ admin=true; $('#inSenha').value=''; renderCadastro(); renderEscala(); travaSalvar(); }
     else toast('Senha incorreta');
   };
   $('#inSenha').addEventListener('keydown',e=>{ if(e.key==='Enter') $('#btEntrar').click(); });
