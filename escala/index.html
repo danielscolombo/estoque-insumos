@@ -282,6 +282,25 @@ table.gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:.6rem;font-weig
 table.gr tr.cob td.fer{background:var(--fer-bg);color:var(--fer);}
 table.gr tr:last-child td{border-bottom:0;}
 
+/* Acima do celular a semana inteira cabe na largura: as sete colunas
+   dividem o espaço em partes iguais e ninguém precisa rolar de lado.
+   No celular volta a rolar — sete colunas em 390px seria ilegível, e
+   para isso existe a vista "Por dia". */
+@media (min-width:760px){
+  .tbw{overflow-x:visible;}
+  table.gr{width:100%;table-layout:fixed;}
+  table.gr th.nm,table.gr td.nm{position:static;min-width:0;max-width:none;width:13.5%;}
+  table.gr th:not(.nm),table.gr td:not(.nm){width:12.35%;}
+  table.gr td.cel{min-width:0;}
+  table.gr select.g{min-width:0;max-width:100%;text-overflow:ellipsis;}
+  table.gr td.nm{padding:0 10px;}
+}
+@media (min-width:760px) and (max-width:1060px){
+  table.gr select.g{font-size:.7rem;padding-left:1px;padding-right:1px;}
+  table.gr select.g.FOLGA,table.gr select.g.AUSENCIA{font-size:.63rem;letter-spacing:.2px;}
+  table.gr td.nm{font-size:.7rem;}
+}
+
 /* rótulo de seção + controle, entre o painel e a escala */
 .barra{display:flex;align-items:center;gap:12px;margin-bottom:-4px;}
 .barra b{font-size:.66rem;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);}
@@ -876,17 +895,44 @@ async function conferirSenha(v){
 // ═══════════════════════════════════════════════════
 // TELA: ESCALA
 // ═══════════════════════════════════════════════════
-function opcoes(sel,vazio){
+// Na grade cada coluna é estreita. Rótulo comprido vira sigla só na
+// EXIBIÇÃO — o valor gravado continua sendo o texto inteiro.
+//   FOLGA BANCO DE HORAS  ->  FOLGA B.H.
+const _curto={};
+function curtoRot(s){
+  const t=String(s||'').trim();
+  if(t.length<=13) return t;
+  if(_curto[t]) return _curto[t];
+  const p=t.split(/\s+/).filter(w=>!/^(DE|DA|DO|DAS|DOS|E|POR|COM|EM|NO|NA)$/i.test(w));
+  if(p.length<2){ _curto[t]=t; return t; }
+  // primeira palavra inteira (ou cortada, se for muito longa)
+  const cab = p[0].length>7 ? p[0].slice(0,6)+'.' : p[0];
+  // siglas curtas (INSS, RH) ficam; o resto vira inicial
+  const resto = p.slice(1).map(w=>w.length<=4 ? w : w[0].toUpperCase()+'.');
+  const juntas = resto.every(w=>/\.$/.test(w)) ? resto.join('') : resto.join(' ');
+  const r = cab+' '+juntas;
+  _curto[t]=r;
+  return r;
+}
+// quais rótulos desta loja apareceram abreviados — vira legenda no PDF
+function abreviados(){
+  const c=cadLoja(loja), out=[];
+  c.ausencias.forEach(a=>{ const k=curtoRot(a.rotulo); if(k!==a.rotulo) out.push([k,a.rotulo]); });
+  return out;
+}
+
+function opcoes(sel,vazio,curto){
   const c=cadLoja(loja);
+  const tx=s=>esc(curto?curtoRot(s):s);
   let h='<option value="">'+(vazio===undefined?'—':vazio)+'</option>';
   if(c.turnos.length){
     h+='<optgroup label="Horários">';
-    c.turnos.forEach(t=>{const r=rot(t);h+='<option value="'+esc(r)+'"'+(sel===r?' selected':'')+'>'+esc(r)+'</option>';});
+    c.turnos.forEach(t=>{const r=rot(t);h+='<option value="'+esc(r)+'"'+(sel===r?' selected':'')+'>'+tx(r)+'</option>';});
     h+='</optgroup>';
   }
   if(c.ausencias.length){
     h+='<optgroup label="Folgas e ausências">';
-    c.ausencias.forEach(a=>{h+='<option value="'+esc(a.rotulo)+'"'+(norm(sel)===norm(a.rotulo)?' selected':'')+'>'+esc(a.rotulo)+'</option>';});
+    c.ausencias.forEach(a=>{h+='<option value="'+esc(a.rotulo)+'"'+(norm(sel)===norm(a.rotulo)?' selected':'')+'>'+tx(a.rotulo)+'</option>';});
     h+='</optgroup>';
   }
   return h;
@@ -973,7 +1019,7 @@ function htmlImpressao(){
       sem.forEach(d=>{
         if(!d.noMes){ h+='<td class="fora"></td>'; return; }
         const val=valor(v.nome,d.dia);
-        h+='<td class="'+classeDe(loja,val)+(FER[d.dia]?' fer':'')+'">'+esc(val||'')+'</td>';
+        h+='<td class="'+classeDe(loja,val)+(FER[d.dia]?' fer':'')+'">'+esc(curtoRot(val||''))+'</td>';
       });
       h+='</tr>';
     });
@@ -991,7 +1037,11 @@ function htmlImpressao(){
      c.turnos.map(t=>esc(rot(t))+' &nbsp;'+esc((ROT_TIPO[norm(t.tipo)]||t.tipo).toLowerCase())).join('<br>')+'</div>';
   const dias=Object.keys(FER).map(Number).sort((x,y)=>x-y);
   h+='<div><b>FERIADOS DO MÊS</b>'+
-     (dias.length?dias.map(d=>pad(d)+'/'+pad(m)+' &nbsp;'+esc(FER[d])).join('<br>'):'nenhum')+'</div></div>';
+     (dias.length?dias.map(d=>pad(d)+'/'+pad(m)+' &nbsp;'+esc(FER[d])).join('<br>'):'nenhum')+'</div>';
+  const ab=abreviados();
+  if(ab.length) h+='<div><b>ABREVIAÇÕES</b>'+
+     ab.map(p=>esc(p[0])+' &nbsp;=&nbsp; '+esc(p[1])).join('<br>')+'</div>';
+  h+='</div>';
 
   return h;
 }
@@ -1084,7 +1134,8 @@ function htmlGrade(vs){
       sem.forEach(d=>{
         if(!d.noMes){ h+='<td class="cel fora"><select class="g" disabled><option></option></select></td>'; return; }
         const val=valor(v.nome,d.dia);
-        h+='<td class="cel'+(FER[d.dia]?' fer':'')+'"><select class="g '+classeDe(loja,val)+'"'+(BLOQ?' disabled':'')+' data-v="'+esc(v.nome)+'" data-d="'+d.dia+'">'+opcoes(val,'')+'</select></td>';
+        h+='<td class="cel'+(FER[d.dia]?' fer':'')+'"><select class="g '+classeDe(loja,val)+'"'+(BLOQ?' disabled':'')+
+           (val?' title="'+esc(val)+'"':'')+' data-v="'+esc(v.nome)+'" data-d="'+d.dia+'">'+opcoes(val,'',true)+'</select></td>';
       });
       h+='</tr>';
     });
