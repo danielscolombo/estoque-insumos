@@ -436,6 +436,15 @@ table.t tr.tot td{background:var(--surface-2);font-weight:600;color:var(--ink);}
 .avisoTrava{padding:13px 17px;background:var(--surface-2);border:1px solid var(--line);
   border-radius:12px;font-size:.8rem;color:var(--muted);line-height:1.6;}
 .avisoTrava b{color:var(--ink);font-weight:600;}
+/* enquanto a planilha não responde */
+.avisoTrava.lendo{display:flex;align-items:center;gap:9px;
+  background:var(--plum-soft);border-color:var(--plum-soft);color:var(--plum);}
+.avisoTrava.lendo b{color:var(--plum);}
+.giro{display:inline-block;width:13px;height:13px;flex:0 0 auto;vertical-align:-2px;
+  border:2px solid currentColor;border-right-color:transparent;border-radius:50%;
+  opacity:.75;animation:giro .75s linear infinite;}
+@keyframes giro{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.giro{animation:none;}}
 
 /* ───────── BARRA DE SALVAR ───────── */
 .savebar{position:fixed;left:0;right:0;bottom:var(--nav-h);height:var(--save-h);z-index:90;
@@ -640,6 +649,246 @@ table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-w
 
 <div class="toast" id="toast"></div>
 
+<script>/*XLSX-INI*/
+// ═══════════════════════════════════════════════════
+// XLSX — planilha de verdade, escrita à mão
+// Um .xlsx é um ZIP de arquivos XML. Aqui montamos os
+// cinco que o Excel exige, sem biblioteca nenhuma, para
+// o painel continuar sendo um arquivo só.
+// Os itens entram no ZIP sem compressão (método 0), que
+// o Excel aceita e dispensa um compressor aqui dentro.
+// ═══════════════════════════════════════════════════
+
+const _tabCRC=(()=>{ const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n;
+    for(let k=0;k<8;k++) c = (c&1) ? (0xEDB88320 ^ (c>>>1)) : (c>>>1);
+    t[n]=c>>>0; }
+  return t; })();
+function crc32(b){ let c=0xFFFFFFFF;
+  for(let i=0;i<b.length;i++) c=(_tabCRC[(c^b[i])&0xFF] ^ (c>>>8))>>>0;
+  return (c^0xFFFFFFFF)>>>0; }
+
+function zipStore(itens){
+  const enc=new TextEncoder();
+  const locais=[], centrais=[];
+  let off=0;
+  itens.forEach(it=>{
+    const nome=enc.encode(it.nome);
+    const dado=typeof it.dado==='string'?enc.encode(it.dado):it.dado;
+    const crc=crc32(dado);
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true); lh.setUint16(4,20,true); lh.setUint16(6,0x0800,true);
+    lh.setUint16(8,0,true);                       // método 0 = guardado
+    lh.setUint16(10,0,true); lh.setUint16(12,0x21,true);   // data fixa
+    lh.setUint32(14,crc,true); lh.setUint32(18,dado.length,true); lh.setUint32(22,dado.length,true);
+    lh.setUint16(26,nome.length,true); lh.setUint16(28,0,true);
+    locais.push(new Uint8Array(lh.buffer),nome,dado);
+
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true); ch.setUint16(4,20,true); ch.setUint16(6,20,true);
+    ch.setUint16(8,0x0800,true); ch.setUint16(10,0,true);
+    ch.setUint16(12,0,true); ch.setUint16(14,0x21,true);
+    ch.setUint32(16,crc,true); ch.setUint32(20,dado.length,true); ch.setUint32(24,dado.length,true);
+    ch.setUint16(28,nome.length,true);
+    ch.setUint32(42,off,true);
+    centrais.push(new Uint8Array(ch.buffer),nome);
+    off += 30+nome.length+dado.length;
+  });
+  const tamCentral=centrais.reduce((s,x)=>s+x.length,0);
+  const fim=new DataView(new ArrayBuffer(22));
+  fim.setUint32(0,0x06054b50,true);
+  fim.setUint16(8,itens.length,true); fim.setUint16(10,itens.length,true);
+  fim.setUint32(12,tamCentral,true); fim.setUint32(16,off,true);
+
+  const partes=locais.concat(centrais,[new Uint8Array(fim.buffer)]);
+  const total=partes.reduce((s,x)=>s+x.length,0);
+  const out=new Uint8Array(total);
+  let p=0; partes.forEach(x=>{ out.set(x,p); p+=x.length; });
+  return out;
+}
+
+// escapa para XML e tira caracteres de controle, que o Excel recusa
+const xesc=s=>String(s==null?'':s)
+  .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'')
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+  .replace(/"/g,'&quot;');
+
+function colNome(i){ let s=''; i++; while(i>0){ const r=(i-1)%26; s=String.fromCharCode(65+r)+s; i=(i-r-1)/26; } return s; }
+
+// ── estilos: fontes, preenchimentos, bordas e as combinações
+const XF={};   // nome -> índice em cellXfs
+function montarEstilos(){
+  const fontes=[
+    {},                                                  // 0 base
+    {b:1,sz:15,cor:'FF3E1526'},                          // 1 título
+    {sz:9,cor:'FF867A82'},                               // 2 subtítulo
+    {b:1,sz:8,cor:'FF867A82'},                           // 3 rótulo de semana
+    {b:1,sz:9,cor:'FF241A21'},                           // 4 cabeçalho dia
+    {sz:9.5,cor:'FF241A21'},                             // 5 nome
+    {sz:9,cor:'FF7A5518'},                               // 6 abertura
+    {sz:9,cor:'FF4C3F70'},                               // 7 intermediário
+    {sz:9,cor:'FF1B5480'},                               // 8 fechamento
+    {sz:9,cor:'FF7A2E4A'},                               // 9 domingo
+    {b:1,sz:8.5,cor:'FF4E434B'},                         // 10 folga
+    {sz:8.5,cor:'FFA32B25'},                             // 11 ausência
+    {b:1,sz:10,cor:'FF241A21'},                          // 12 contagem
+    {b:1,sz:7.5,cor:'FF867A82'},                         // 13 rótulo do rodapé
+    {sz:8.5,cor:'FF4E434B'},                             // 14 texto do rodapé
+    {b:1,sz:9,cor:'FF7A2E4A'},                           // 15 cabeçalho domingo
+    {b:1,sz:9,cor:'FFA32B25'},                           // 16 cabeçalho feriado
+    {b:1,sz:9,cor:'FFB4A9B0'},                           // 17 cabeçalho fora do mês
+    {b:1,sz:9,cor:'FF186B51'}                            // 18 validada
+  ];
+  const fonteXml=fontes.map(f=>'<font>'+(f.b?'<b/>':'')+
+    '<sz val="'+(f.sz||10)+'"/><color rgb="'+(f.cor||'FF241A21')+'"/>'+
+    '<name val="Calibri"/></font>').join('');
+
+  const cores=['FBF2E1','EFEAF6','E7EFF6','F7ECF1','EBE4E8','FBEEEC','F5F1F3','FFFFFF'];
+  const fillXml='<fill><patternFill patternType="none"/></fill>'+
+                '<fill><patternFill patternType="gray125"/></fill>'+
+    cores.map(c=>'<fill><patternFill patternType="solid"><fgColor rgb="FF'+c+'"/>'+
+      '<bgColor indexed="64"/></patternFill></fill>').join('');
+  const F={ab:2,in:3,fe:4,do:5,fo:6,au:7,cinza:8,branco:9};
+
+  const bordaFina='<left style="thin"><color rgb="FFD8CDD3"/></left>'+
+                  '<right style="thin"><color rgb="FFD8CDD3"/></right>'+
+                  '<top style="thin"><color rgb="FFD8CDD3"/></top>'+
+                  '<bottom style="thin"><color rgb="FFD8CDD3"/></bottom>';
+  const bordaCab ='<left style="thin"><color rgb="FFD8CDD3"/></left>'+
+                  '<right style="thin"><color rgb="FFD8CDD3"/></right>'+
+                  '<top style="thin"><color rgb="FFD8CDD3"/></top>'+
+                  '<bottom style="medium"><color rgb="FF867A82"/></bottom>';
+  const borderXml='<border><left/><right/><top/><bottom/><diagonal/></border>'+
+                  '<border>'+bordaFina+'<diagonal/></border>'+
+                  '<border>'+bordaCab+'<diagonal/></border>';
+  const B={nenhuma:0,fina:1,cab:2};
+
+  // cada entrada: [fonte, fill, borda, alinhamento]
+  const defs={
+    base:      [0,0,B.nenhuma,''],
+    titulo:    [1,0,B.nenhuma,'<alignment vertical="center"/>'],
+    sub:       [2,0,B.nenhuma,'<alignment vertical="center"/>'],
+    validada:  [18,0,B.nenhuma,'<alignment horizontal="right" vertical="center"/>'],
+    semana:    [3,0,B.nenhuma,'<alignment vertical="center"/>'],
+    cab:       [4,F.branco,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
+    cabDom:    [15,F.do,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
+    cabFer:    [16,F.au,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
+    cabFora:   [17,F.cinza,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
+    cabNome:   [4,F.branco,B.cab,'<alignment horizontal="left" vertical="center"/>'],
+    nome:      [5,F.cinza,B.fina,'<alignment horizontal="left" vertical="center"/>'],
+    vazio:     [0,F.branco,B.fina,''],
+    fora:      [0,F.cinza,B.fina,''],
+    ABERTURA:  [6,F.ab,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    INTERMEDIARIO:[7,F.in,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    FECHAMENTO:[8,F.fe,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    DOMINGO:   [9,F.do,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    FOLGA:     [10,F.fo,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    AUSENCIA:  [11,F.au,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    conta:     [12,F.cinza,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    contaNome: [3,F.cinza,B.fina,'<alignment horizontal="right" vertical="center"/>'],
+    rodLabel:  [13,0,B.nenhuma,'<alignment vertical="center"/>'],
+    rodTexto:  [14,0,B.nenhuma,'<alignment vertical="center"/>']
+  };
+  let i=0, xfs='';
+  Object.keys(defs).forEach(k=>{
+    const [fo,fi,bo,al]=defs[k];
+    XF[k]=i++;
+    xfs+='<xf numFmtId="0" fontId="'+fo+'" fillId="'+fi+'" borderId="'+bo+'" xfId="0"'+
+         ' applyFont="1" applyFill="1" applyBorder="1"'+(al?' applyAlignment="1"':'')+
+         (al?('>'+al+'</xf>'):'/>');
+  });
+
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<fonts count="'+fontes.length+'">'+fonteXml+'</fonts>'+
+    '<fills count="'+(cores.length+2)+'">'+fillXml+'</fills>'+
+    '<borders count="3">'+borderXml+'</borders>'+
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'+
+    '<cellXfs count="'+i+'">'+xfs+'</cellXfs>'+
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'+
+    '</styleSheet>';
+}
+
+// ── construtor de planilha
+function Folha(){
+  this.linhas=[];      // cada linha: array de {v, s, n} ou null
+  this.merges=[];
+  this.alturas={};
+}
+Folha.prototype.add=function(cels,altura){
+  this.linhas.push(cels||[]);
+  if(altura) this.alturas[this.linhas.length]=altura;
+  return this.linhas.length;                     // número da linha (1-based)
+};
+Folha.prototype.merge=function(l,c1,c2){
+  if(c2>c1) this.merges.push(colNome(c1)+l+':'+colNome(c2)+l);
+};
+Folha.prototype.xml=function(larguras){
+  let sd='';
+  this.linhas.forEach((cels,i)=>{
+    const ln=i+1;
+    let cs='';
+    cels.forEach((c,j)=>{
+      if(!c) return;
+      const ref=colNome(j)+ln;
+      const st=' s="'+(XF[c.s]!==undefined?XF[c.s]:XF.base)+'"';
+      if(c.n!==undefined) cs+='<c r="'+ref+'"'+st+'><v>'+c.n+'</v></c>';
+      else if(c.v!==undefined && c.v!=='') cs+='<c r="'+ref+'"'+st+' t="inlineStr"><is><t xml:space="preserve">'+xesc(c.v)+'</t></is></c>';
+      else cs+='<c r="'+ref+'"'+st+'/>';
+    });
+    sd+='<row r="'+ln+'"'+(this.alturas[ln]?(' ht="'+this.alturas[ln]+'" customHeight="1"'):'')+'>'+cs+'</row>';
+  });
+  const cols=larguras.map((w,i)=>'<col min="'+(i+1)+'" max="'+(i+1)+'" width="'+w+'" customWidth="1"/>').join('');
+  return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+    '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'+
+    '<sheetViews><sheetView workbookViewId="0" showGridLines="0"/></sheetViews>'+
+    '<sheetFormatPr defaultRowHeight="15"/>'+
+    '<cols>'+cols+'</cols>'+
+    '<sheetData>'+sd+'</sheetData>'+
+    (this.merges.length?('<mergeCells count="'+this.merges.length+'">'+
+      this.merges.map(m=>'<mergeCell ref="'+m+'"/>').join('')+'</mergeCells>'):'')+
+    '<pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.2" footer="0.2"/>'+
+    '<pageSetup orientation="portrait" paperSize="9" fitToWidth="1" fitToHeight="0"/>'+
+    '</worksheet>';
+}
+
+function baixarXlsx(nomeArquivo,nomeAba,folha,larguras){
+  const estilos=montarEstilos();          // preenche XF antes de gerar o XML da folha
+  const arquivos=[
+    {nome:'[Content_Types].xml',dado:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'+
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'+
+      '<Default Extension="xml" ContentType="application/xml"/>'+
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'+
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'+
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'+
+      '</Types>'},
+    {nome:'_rels/.rels',dado:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>'+
+      '</Relationships>'},
+    {nome:'xl/workbook.xml',dado:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'+
+      ' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'+
+      '<sheets><sheet name="'+xesc(nomeAba).slice(0,31)+'" sheetId="1" r:id="rId1"/></sheets></workbook>'},
+    {nome:'xl/_rels/workbook.xml.rels',dado:'<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'+
+      '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'+
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'+
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'+
+      '</Relationships>'},
+    {nome:'xl/styles.xml',dado:estilos},
+    {nome:'xl/worksheets/sheet1.xml',dado:folha.xml(larguras)}
+  ];
+  const zip=zipStore(arquivos);
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob([zip],
+    {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+  a.download=nomeArquivo;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+}
+/*XLSX-FIM*/</script>
+
 <script>
 // ═══════════════════════════════════════════════════
 // CONFIG
@@ -675,6 +924,10 @@ let VISTA = localStorage.getItem('escVista') || 'grade';
 let carregouOk = true;
 let configOk = true;
 let SENHA_SESSAO = '';
+// A planilha leva alguns segundos para responder. Enquanto isso a tela
+// já aparece com a última cópia deste computador, mas em modo leitura —
+// assim ninguém edita uma célula que a resposta vai sobrescrever.
+let lendo = false;
 
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
@@ -947,7 +1200,9 @@ function renderEscala(){
   const vs=ativas(loja);
   const alvo=$('#listaDias');
   if(!vs.length){
-    alvo.innerHTML='<div class="vazio" style="margin:12px">'+(configOk
+    alvo.innerHTML='<div class="vazio" style="margin:12px">'+(lendo
+      ? '<span class="giro"></span> Lendo a planilha…<br>A escala aparece em alguns segundos.'
+      : configOk
       ? 'Nenhuma vendedora cadastrada nesta loja.<br>Peça ao gestor para cadastrar.'
       : 'Não consegui ler o cadastro.<br>Recarregue a página — a escala não está vazia.')+'</div>';
     $('#legenda').innerHTML=''; return;
@@ -1046,6 +1301,86 @@ function htmlImpressao(){
   return h;
 }
 
+// ═══════════════════════════════════════════════════
+// EXCEL — a mesma folha do PDF, em .xlsx de verdade
+// ═══════════════════════════════════════════════════
+function gerarExcel(){
+  const l=loja, vs=ativas(l);
+  if(!vs.length){ toast('Não há escala para exportar'); return; }
+  const [a,mn]=mes.split('-').map(Number);
+  const FER=feriadosDoMes(a,mn,l);
+  const c=cadLoja(l);
+  const s=STATUS[chave()]||{};
+  const abrev={};
+  const F=new Folha();
+
+  let ln=F.add([{v:'ESCALA DE TRABALHO',s:'titulo'}],26);
+  F.merge(ln,0,5);
+  ln=F.add([{v:l+'  ·  '+MESES[mn-1]+' '+a,s:'sub'},null,null,null,null,null,
+            {v:sitDo()==='VALIDADA'?'VALIDADA':sitDo(),s:'validada'}],17);
+  F.merge(ln,0,3);
+  F.add([]);
+
+  semanasDoMes().forEach((sem,si)=>{
+    const noMes=sem.filter(d=>d.noMes);
+    ln=F.add([{v:'SEMANA '+(si+1)+'  ·  '+noMes[0].dia+' a '+noMes[noMes.length-1].dia,s:'semana'}],16);
+    F.merge(ln,0,3);
+
+    const temFer=sem.some(d=>d.noMes&&FER[d.dia]);
+    const cab=[{v:'NOME',s:'cabNome'}];
+    sem.forEach(d=>{
+      const f=d.noMes?FER[d.dia]:null;
+      const st=!d.noMes?'cabFora':(f?'cabFer':(d.dow===0?'cabDom':'cab'));
+      cab.push({v:DOW[d.dow]+'\n'+(d.noMes?pad(d.dia):'–')+(f?'\nFERIADO':''),s:st});
+    });
+    F.add(cab,temFer?42:32);
+
+    vs.forEach(v=>{
+      const li=[{v:v.nome,s:'nome'}];
+      sem.forEach(d=>{
+        if(!d.noMes){ li.push({v:'',s:'fora'}); return; }
+        const val=valor(v.nome,d.dia);
+        if(!val){ li.push({v:'',s:'vazio'}); return; }
+        const cl=classeDe(l,val);
+        let txt=val;
+        if(cl==='FOLGA'||cl==='AUSENCIA'){
+          txt=curtoRot(val);
+          if(txt!==String(val).trim()) abrev[txt]=String(val).trim();
+        }
+        li.push({v:txt,s:(cl||'vazio')});
+      });
+      F.add(li,19);
+    });
+
+    const cont=[{v:'NA LOJA',s:'contaNome'}];
+    sem.forEach(d=>{
+      if(!d.noMes){ cont.push({v:'',s:'fora'}); return; }
+      let q=0; vs.forEach(v=>{ if(trabalha(l,valor(v.nome,d.dia))) q++; });
+      cont.push({n:q,s:'conta'});
+    });
+    F.add(cont,19);
+    F.add([]);
+  });
+
+  F.add([{v:'TURNOS',s:'rodLabel'}]);
+  c.turnos.forEach(t=>F.add([{v:rot(t)+'   '+(ROT_TIPO[norm(t.tipo)]||t.tipo).toLowerCase(),s:'rodTexto'}]));
+  F.add([]);
+  F.add([{v:'FERIADOS DO MÊS',s:'rodLabel'}]);
+  const dias=Object.keys(FER).map(Number).sort((x,y)=>x-y);
+  if(dias.length) dias.forEach(d=>F.add([{v:pad(d)+'/'+pad(mn)+'   '+FER[d],s:'rodTexto'}]));
+  else F.add([{v:'nenhum',s:'rodTexto'}]);
+  const sig=Object.keys(abrev);
+  if(sig.length){
+    F.add([]);
+    F.add([{v:'ABREVIAÇÕES',s:'rodLabel'}]);
+    sig.forEach(k=>F.add([{v:k+'   =   '+abrev[k],s:'rodTexto'}]));
+  }
+
+  baixarXlsx('Escala '+l+' '+mes+'.xlsx', MESES[mn-1].slice(0,3)+' '+a, F,
+             [22,13.5,13.5,13.5,13.5,13.5,13.5,13.5]);
+  toast('Escala exportada para Excel');
+}
+
 const MM=96/25.4;                              // 1mm em pixels de tela
 function gerarPDF(){
   const box=$('#impressao'), fo=$('#folha');
@@ -1074,6 +1409,9 @@ function gerarPDF(){
 }
 
 function avisoTrava(){
+  if(lendo)
+    return '<div class="avisoTrava lendo"><span class="giro"></span> <b>Lendo a planilha…</b> '+
+           'A tela abaixo é a última cópia deste computador. Assim que a planilha responder, ela se atualiza sozinha e libera a edição.</div>';
   const sit=sitDo();
   if(sit==='VALIDADA' && !admin)
     return '<div class="avisoTrava">🔒 <b>Escala validada.</b> Já foi conferida e fechada pelo gestor, então não pode mais ser alterada. Se precisar corrigir alguma coisa, fale com ele para reabrir o mês.</div>';
@@ -1168,7 +1506,7 @@ function sitDo(){
   return ['RASCUNHO','ENVIADA','VALIDADA'].indexOf(v)>=0?v:'RASCUNHO';
 }
 // validada = fechada. Só o gestor (senha no Cadastro) mexe.
-function bloqueada(){ return sitDo()==='VALIDADA' && !admin; }
+function bloqueada(){ return lendo || (sitDo()==='VALIDADA' && !admin); }
 
 async function mudarSit(nova,quem,aviso){
   STATUS[chave()]={situacao:nova,atualizado:'agora',por:quem};
@@ -1177,14 +1515,13 @@ async function mudarSit(nova,quem,aviso){
   carregarStatus().then(()=>{ renderSit(); });
 }
 
-// quanto do mês já está preenchido — serve de termômetro para a gerente
+// números do mês para o painel de cima
 function resumoMes(){
   const vs=ativas(loja), nd=diasNoMes(mes);
-  let feitas=0;
-  vs.forEach(v=>{ for(let d=1;d<=nd;d++) if(String(valor(v.nome,d)||'').trim()) feitas++; });
-  const total=vs.length*nd;
-  return {pessoas:vs.length, feitas:feitas, total:total,
-          pct: total?Math.round(feitas/total*100):0,
+  let soma=0;
+  for(let d=1;d<=nd;d++){ vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d))) soma++; }); }
+  return {pessoas:vs.length,
+          media: nd?(soma/nd):0,
           feriados:Object.keys(feriadosAtuais()).length};
 }
 
@@ -1227,7 +1564,8 @@ function renderSit(){
   const r=resumoMes();
 
   let dir='';
-  if(sit==='VALIDADA')           dir+='<button class="bt bt-ghost" id="btPDF">Gerar PDF</button>';
+  if(sit==='VALIDADA')           dir+='<button class="bt bt-ghost" id="btPDF">Gerar PDF</button>'+
+                                      '<button class="bt bt-ghost" id="btXLS">Gerar Excel</button>';
   if(admin && sit!=='VALIDADA')  dir+='<button class="bt" id="btValidar">Validar</button>';
   if(admin && sit==='VALIDADA')  dir+='<button class="bt bt-ghost" id="btReabrir">Reabrir</button>';
 
@@ -1243,8 +1581,8 @@ function renderSit(){
     '</div>';
 
   h+='<div class="lado">'+
-    '<div class="mini"><div class="n num">'+r.pct+'%</div>'+
-      '<div class="t"><b>Preenchida</b>'+r.feitas+' de '+r.total+' células do mês</div></div>'+
+    '<div class="mini"><div class="n num">'+r.media.toFixed(1).replace('.',',')+'</div>'+
+      '<div class="t"><b>Média na loja</b>pessoas por dia, no mês</div></div>'+
     '<div class="mini"><div class="n num">'+r.pessoas+'</div>'+
       '<div class="t"><b>Na escala</b>vendedoras ativas nesta loja</div></div>'+
     '<div class="mini"><div class="n num">'+r.feriados+'</div>'+
@@ -1255,6 +1593,8 @@ function renderSit(){
 
   const bp=$('#btPDF');
   if(bp) bp.onclick=()=>gerarPDF();
+  const bx=$('#btXLS');
+  if(bx) bx.onclick=()=>gerarExcel();
 
   const bv=$('#btValidar');
   if(bv) bv.onclick=async()=>{
@@ -1448,6 +1788,13 @@ function travaSalvar(){
   const bs=$('#btSalvar'), be=$('#btEnviar'), av=$('#semFalha');
   const nota=$('#avisoSalvar');
   const diz=t=>{ if(nota) nota.innerHTML=t; };
+  if(lendo){
+    bs.disabled=true; bs.textContent='Lendo…';
+    be.disabled=true; be.style.opacity=.45; be.hidden=false;
+    diz('Lendo a planilha — a edição libera em alguns segundos.');
+    if(av) av.hidden=true;
+    return;
+  }
   const semRoteiro = !configOk || !ativas(loja).length;
   if(!carregouOk || semRoteiro){
     bs.disabled=true; bs.textContent='Sem conexão';
@@ -1487,22 +1834,46 @@ function atualizarSelLoja(){
 
 document.addEventListener('DOMContentLoaded',init);
 
+// Põe a tela de pé antes de falar com a planilha. O Apps Script leva
+// vários segundos para responder, e sem isto a gerente olhava para uma
+// tela em branco sem saber se tinha quebrado.
+function primeiraPintura(){
+  try{
+    const g=JSON.parse(localStorage.getItem('escCfg')||'null');
+    if(g&&g.lojas&&g.lojas.length){ LOJAS=g.lojas; CAD=g.cad||{}; }
+  }catch(_){}
+  LOJAS.forEach(cadLoja);
+  atualizarSelLoja();
+  try{
+    const m=JSON.parse(localStorage.getItem('esc:'+chave())||'null');
+    if(m) ESC[chave()]=m;
+  }catch(_){}
+  lendo=true;
+  renderEscala();
+  travaSalvar();
+}
+
 async function init(){
   const hoje=new Date();
   mes=localStorage.getItem('escMes')||(hoje.getFullYear()+'-'+pad(hoje.getMonth()+1));
   loja=localStorage.getItem('escLoja')||'';
 
+  primeiraPintura();
+
   LOJAS.forEach(cadLoja);
   const lojaPedida=loja;
   if(await carregarTudo()){
+    lendo=false;
     atualizarSelLoja();
     // se a loja guardada não existe mais, a escala lida não serve
     if(loja!==lojaPedida){ await abrirMes(); }
     else{ carregouOk=true; sujo=false; renderEscala(); travaSalvar(); }
   }else{
+    // caminho antigo, em três chamadas — segue "lendo" até a última
     await carregarConfig();
     atualizarSelLoja();
     await carregarStatus();
+    lendo=false;
     await abrirMes();
   }
 
