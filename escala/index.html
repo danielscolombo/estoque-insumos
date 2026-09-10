@@ -533,6 +533,38 @@ table.t tr.tot td{background:var(--surface-2);font-weight:600;color:var(--ink);}
 .dpara{background:var(--plum-soft);color:var(--plum);font-weight:600;}
 .dse{color:var(--muted);text-align:center;font-size:.8rem;}
 
+/* ───────── CONFERÊNCIA DA ESCALA ───────── */
+.cfn{font-style:normal;font-size:.68rem;font-weight:600;letter-spacing:.4px;border-radius:5px;
+  padding:1px 7px;margin-left:6px;background:var(--alerta-bg);color:var(--alerta);
+  border:1px solid var(--alerta-line);}
+.cfn.ruim{background:var(--fer-bg);color:var(--fer);border-color:var(--fer);}
+.cfn.ok{background:var(--vr-bg);color:var(--vr);border-color:var(--vr);}
+.aviso-s .ruim{color:var(--fer);}
+
+.confOk{padding:13px 15px;border-radius:11px;background:var(--vr-bg);color:var(--vr);
+  font-size:.85rem;line-height:1.6;}
+.confOk b{font-weight:600;}
+.cf-g{display:flex;flex-direction:column;gap:9px;}
+.cf-g > b{display:flex;align-items:center;gap:8px;font-size:.72rem;font-weight:600;letter-spacing:1.1px;
+  text-transform:uppercase;}
+.cf-g > b em{font-style:normal;font-size:.68rem;letter-spacing:0;border-radius:99px;padding:1px 8px;
+  color:var(--surface);flex:none;}
+.cf-g > b.bloq{color:var(--fer);}
+.cf-g > b.avi{color:var(--alerta);}
+.cf-g > b.bloq em{background:var(--fer);}
+.cf-g > b.avi em{background:var(--alerta);}
+.cf-r{border:1px solid var(--line);border-radius:11px;overflow:hidden;background:var(--surface);}
+.cf-r > u{display:block;text-decoration:none;padding:8px 12px;background:var(--surface-2);
+  border-bottom:1px solid var(--line);font-size:.71rem;font-weight:600;letter-spacing:.9px;
+  text-transform:uppercase;color:var(--muted);}
+.cf-i{padding:10px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px;}
+.cf-r .cf-i:first-of-type{border-top:none;}
+.cf-i .q{font-size:.82rem;font-weight:600;color:var(--ink);}
+.cf-i .t{font-size:.81rem;color:var(--ink-2);line-height:1.55;}
+.cf-i .b{font-size:.71rem;color:var(--faint);}
+.cf-i.bloq{border-left:3px solid var(--fer);}
+.cf-i.avi{border-left:3px solid var(--alerta);}
+
 /* ───────── TOAST ───────── */
 .toast{position:fixed;left:50%;transform:translateX(-50%) translateY(14px);
   bottom:calc(var(--nav-h) + var(--save-h) + 18px);
@@ -1555,6 +1587,223 @@ function fmtData(v){
   return t;
 }
 
+// ═══════════════════════════════════════════════════
+// CONFERÊNCIA DA ESCALA
+// As mesmas regras que o Painel de Benefícios já mostrava, agora aqui —
+// e valendo como trava: escala com apontamento não vai para o gestor.
+// Só "dia sem ninguém na loja" avisa sem travar, porque é operação e
+// não lei (loja fechada, feriado, reforma).
+// ═══════════════════════════════════════════════════
+const REGRA={
+  diasSeguidos:7,      // 7 dias seguidos já viola o descanso semanal
+  horasSemana:44,
+  horasSemanaGrave:48,
+  horasDia:8,
+  horasDiaGrave:10,    // 8 + 2 extras (art. 59)
+  interjornada:11,
+  domingosSeguidos:2,  // política da casa
+  domingoFolgaEmCada:3 // Lei 10.101: um domingo de folga a cada 3
+};
+const ROT_REGRA={descanso:'Descanso semanal',domingo:'Domingos',jornada:'Jornada diária',
+  interjornada:'Interjornada',semana:'Jornada semanal',cobertura:'Cobertura'};
+
+// "09:00 - 17:20" -> {ini:540, fim:1040, liq:440}
+// Acima de 6h de presença desconta 1h de intervalo (art. 71) — é assim
+// que 6 dias de 8h20 fecham as 44h da semana.
+function faixaHoraria(v){
+  const m=String(v||'').match(/(\d{1,2}):(\d{2})\s*[-–]\s*(\d{1,2}):(\d{2})/);
+  if(!m) return null;
+  const ini=(+m[1])*60+(+m[2]);
+  let fim=(+m[3])*60+(+m[4]);
+  if(fim<=ini) fim+=1440;                 // vira o dia
+  const span=fim-ini;
+  return {ini:ini, fim:fim, span:span, liq: span>360 ? span-60 : span};
+}
+function hhmm(min){
+  const n=Math.max(0,Math.round(min));
+  return Math.floor(n/60)+'h'+(n%60?String(n%60).padStart(2,'0'):'');
+}
+function listaDias(ds,rot){
+  if(!ds.length) return '';
+  return (rot||'Dias')+' '+ds.map(pad).join(', ')+'.';
+}
+
+function conferirEscala(){
+  const vs=ativas(loja), achados=[];
+  if(!vs.length) return achados;
+  const nd=diasNoMes(mes), FER=feriadosAtuais();
+  const add=(nivel,regra,pessoa,texto,base)=>achados.push({nivel,regra,pessoa,texto,base});
+
+  vs.forEach(v=>{
+    const n=v.nome;
+    const dia=d=>valor(n,d);
+    const trab=d=>trabalha(loja,dia(d));
+
+    // dias seguidos sem folga
+    let corr=0, ini=0;
+    for(let d=1;d<=nd+1;d++){
+      if(d<=nd && trab(d)){ if(!corr) ini=d; corr++; }
+      else{
+        if(corr>=REGRA.diasSeguidos)
+          add('grave','descanso',n,corr+' dias seguidos sem folga, de '+pad(ini)+' a '+pad(ini+corr-1)+'.',
+              'CLT art. 67 — 24h de descanso a cada semana');
+        corr=0;
+      }
+    }
+
+    // domingos
+    const doms=[]; for(let d=1;d<=nd;d++) if(dataDe(mes,d).getDay()===0) doms.push(d);
+    const domTrab=doms.filter(trab);
+    let seq=1;
+    for(let i=1;i<doms.length;i++){
+      const at=trab(doms[i]), an=trab(doms[i-1]);
+      if(at&&an){ seq++;
+        if(seq===REGRA.domingosSeguidos)
+          add('grave','domingo',n,'Trabalha em domingos seguidos ('+pad(doms[i-1])+' e '+pad(doms[i])+').',
+              'Política da casa — a lei exige folga em 1 domingo a cada 3');
+      } else if(!at) seq=0; else seq=1;
+    }
+    if(doms.length>=REGRA.domingoFolgaEmCada && domTrab.length===doms.length)
+      add('grave','domingo',n,'Trabalha em todos os '+doms.length+' domingos do mês, sem nenhuma folga dominical.',
+          'Lei 10.101/2000 art. 6º-A');
+
+    // jornada diária
+    const longos=[], extras=[];
+    let maiorL=0, maiorE=0;
+    for(let d=1;d<=nd;d++){
+      const f=faixaHoraria(dia(d)); if(!f) continue;
+      const hs=f.liq/60;
+      if(hs>REGRA.horasDiaGrave){ longos.push(d); maiorL=Math.max(maiorL,f.liq); }
+      else if(hs>REGRA.horasDia){ extras.push(d); maiorE=Math.max(maiorE,f.liq); }
+    }
+    if(longos.length)
+      add('grave','jornada',n,longos.length+' dia(s) passando de 10h de trabalho (maior: '+hhmm(maiorL)+
+          '). '+listaDias(longos),'CLT art. 59 — no máximo 2 horas extras por dia');
+    if(extras.length)
+      add('atencao','jornada',n,extras.length+' dia(s) acima de 8h (maior: '+hhmm(maiorE)+', '+
+          hhmm(maiorE-480)+' de extra). '+listaDias(extras),'CF art. 7º XIII — 8h por dia');
+
+    // 11h entre jornadas
+    const curtas=[]; let pior=null;
+    for(let d=1;d<nd;d++){
+      const f1=faixaHoraria(dia(d)), f2=faixaHoraria(dia(d+1));
+      if(!f1||!f2) continue;
+      const folga=(1440+f2.ini)-f1.fim;
+      if(folga<REGRA.interjornada*60){
+        curtas.push(d);
+        if(!pior||folga<pior.folga) pior={folga:folga,d:d,a:dia(d),b:dia(d+1)};
+      }
+    }
+    if(curtas.length)
+      add('grave','interjornada',n,curtas.length+' emenda(s) com menos de 11h de descanso. A menor tem '+
+          hhmm(pior.folga)+', entre o dia '+pad(pior.d)+' ('+pior.a+') e o dia '+pad(pior.d+1)+
+          ' ('+pior.b+'). '+listaDias(curtas,'Emendas nos dias'),
+          'CLT art. 66 — mínimo de 11h entre jornadas');
+  });
+
+  // 44h semanais — só nas semanas inteiras dentro do mês
+  let puladas=0;
+  const porPessoa={};
+  semanasDoMes().forEach((sem,si)=>{
+    if(sem.some(d=>!d.noMes)){ puladas++; return; }
+    vs.forEach(v=>{
+      let tot=0;
+      sem.forEach(d=>{ const f=faixaHoraria(valor(v.nome,d.dia)); if(f) tot+=f.liq; });
+      const hs=tot/60;
+      if(hs<=REGRA.horasSemana) return;
+      const p=porPessoa[v.nome]=porPessoa[v.nome]||{graves:[],aten:[],maior:0};
+      p.maior=Math.max(p.maior,tot);
+      (hs>REGRA.horasSemanaGrave?p.graves:p.aten).push(si+1);
+    });
+  });
+  Object.keys(porPessoa).forEach(n=>{
+    const p=porPessoa[n];
+    if(p.graves.length)
+      achados.push({nivel:'grave',regra:'semana',pessoa:n,
+        texto:'Semana(s) '+p.graves.join(', ')+' acima de 48h — passa até do limite com horas extras. '+
+              'A maior fecha '+hhmm(p.maior)+'.',
+        base:'CF art. 7º XIII + CLT art. 59'});
+    if(p.aten.length)
+      achados.push({nivel:'atencao',regra:'semana',pessoa:n,
+        texto:'Semana(s) '+p.aten.join(', ')+' acima das 44h. A maior fecha '+hhmm(p.maior)+'.',
+        base:'CF art. 7º XIII — 44h semanais'});
+  });
+
+  // dia sem ninguém na loja — avisa, mas não trava
+  for(let d=1;d<=nd;d++){
+    let q=0; vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d))) q++; });
+    if(!q) achados.push({nivel:'atencao',regra:'cobertura',pessoa:'—',
+      texto:'Dia '+pad(d)+(FER[d]?' (feriado)':'')+' sem ninguém escalado na loja.',
+      base:'Cobertura da operação'});
+  }
+
+  achados._puladas=puladas;
+  return achados;
+}
+
+// O que impede o envio: tudo, menos cobertura.
+const travaEnvio=x=>x.regra!=='cobertura';
+
+function htmlApontamentos(r){
+  const bloqueiam=r.filter(travaEnvio);
+  const avisos=r.filter(x=>!travaEnvio(x));
+  const nota=r._puladas?('<p class="pat">'+r._puladas+' semana(s) que começam ou terminam fora deste mês '+
+    'ficaram de fora da conta das 44h — só dá para somar semana inteira.</p>'):'';
+  if(!r.length)
+    return '<div class="confOk">✓ <b>Nenhuma regra quebrada.</b> Descanso semanal, domingos, 44h por semana, '+
+           '8h por dia, 11h entre jornadas e cobertura — tudo dentro.</div>'+nota;
+
+  let h='';
+  [['bloq','Precisa corrigir antes de enviar',bloqueiam],
+   ['avi','Só um aviso — não impede o envio',avisos]].forEach(function(par){
+    const nv=par[0], tit=par[1], lista=par[2];
+    if(!lista.length) return;
+    h+='<div class="cf-g"><b class="'+nv+'">'+tit+' <em>'+lista.length+'</em></b>';
+    const porRegra={};
+    lista.forEach(x=>{ (porRegra[x.regra]=porRegra[x.regra]||[]).push(x); });
+    Object.keys(porRegra).forEach(k=>{
+      h+='<div class="cf-r"><u>'+esc(ROT_REGRA[k]||k)+'</u>';
+      porRegra[k].forEach(x=>{
+        h+='<div class="cf-i '+nv+'"><span class="q">'+esc(x.pessoa)+'</span>'+
+           '<span class="t">'+esc(x.texto)+'</span><span class="b">'+esc(x.base)+'</span></div>';
+      });
+      h+='</div>';
+    });
+    h+='</div>';
+  });
+  return h+nota;
+}
+
+function abrirConferencia(aoEnviar){
+  const r=conferirEscala();
+  const n=r.filter(travaEnvio).length;
+  const tit = aoEnviar
+    ? (n? 'Não dá para enviar ainda' : 'Escala conferida')
+    : 'Conferência da escala';
+  let h=aoEnviar&&n
+    ? '<p>A escala de <b>'+esc(rotMes(mes))+'</b> tem <b>'+n+'</b> '+
+      (n>1?'apontamentos que precisam':'apontamento que precisa')+' de correção. '+
+      'Corrija e envie de novo — nada foi enviado ao gestor.</p>'
+    : '';
+  h+=htmlApontamentos(r);
+  h+='<div class="mod-dir">'+
+     (aoEnviar&&!n?'<button class="bt bt-ghost" id="btCfFechar">Cancelar</button>'+
+                   '<button class="bt" id="btCfEnviar">Enviar mesmo assim</button>'
+                  :'<button class="bt" id="btCfFechar">Fechar</button>')+
+     '</div>';
+  abrirMod(esc(tit),h);
+  $('#btCfFechar').onclick=fecharMod;
+  const be2=$('#btCfEnviar');
+  if(be2) be2.onclick=()=>{ fecharMod(); salvar('ENVIADA'); };
+}
+
+// resumo curto para o painel de situação
+function resumoConf(){
+  const r=conferirEscala();
+  const b=r.filter(travaEnvio).length, a=r.length-b;
+  return {total:r.length, bloq:b, aviso:a};
+}
+
 // situação do mês aberto e trava de edição
 function sitDo(){
   const s=STATUS[chave()];
@@ -1793,8 +2042,12 @@ function renderSit(){
   const r=resumoMes();
 
   const v=versaoAtual();
+  const cf=(sit!=='VALIDADA'||admin) ? resumoConf() : null;
 
   let dir='';
+  if(cf) dir+='<button class="bt bt-ghost" id="btConf">Conferir escala'+
+              (cf.bloq?' <em class="cfn ruim">'+cf.bloq+'</em>':
+               cf.aviso?' <em class="cfn">'+cf.aviso+'</em>':' <em class="cfn ok">✓</em>')+'</button>';
   if(sit==='VALIDADA')           dir+='<button class="bt bt-ghost" id="btPDF">Gerar PDF</button>'+
                                       '<button class="bt bt-ghost" id="btXLS">Gerar Excel</button>';
   // a gerente não edita um mês validado — ela pede uma versão nova
@@ -1833,6 +2086,8 @@ function renderSit(){
   const bx=$('#btXLS');
   if(bx) bx.onclick=()=>gerarExcel();
 
+  const bc=$('#btConf');
+  if(bc) bc.onclick=()=>abrirConferencia(false);
   const ba=$('#btAlterar');
   if(ba) ba.onclick=()=>pedirAlteracao();
   const bh=$('#btHist');
@@ -1970,7 +2225,12 @@ function marcarSujo(){
   sujo=true;
   if(carregouOk){
     $('#btSalvar').disabled=false; $('#btSalvar').textContent='Salvar';
-    const n=$('#avisoSalvar'); if(n) n.innerHTML='Há alterações <b>não salvas</b>.';
+    const cf=resumoConf();
+    const n=$('#avisoSalvar');
+    if(n) n.innerHTML='Há alterações <b>não salvas</b>.'+
+      (cf.bloq?' <b class="ruim">'+cf.bloq+' '+(cf.bloq>1?'apontamentos impedem':'apontamento impede')+
+        ' o envio.</b>':'');
+    atualizarSeloConf(cf);
   }
   try{ localStorage.setItem('esc:'+chave(),JSON.stringify(ESC[chave()]||{})); }catch(e){}
 }
@@ -2066,7 +2326,23 @@ function travaSalvar(){
   }
   be.hidden=false; be.disabled=false; be.style.opacity=1;
   bs.disabled=!sujo; bs.textContent= sujo?'Salvar':'Salvo';
-  diz(sujo ? 'Há alterações <b>não salvas</b>.' : 'Tudo salvo.');
+  const cf=resumoConf();
+  const base = sujo ? 'Há alterações <b>não salvas</b>.' : 'Tudo salvo.';
+  diz(cf.bloq
+      ? base+' <b class="ruim">'+cf.bloq+' '+(cf.bloq>1?'apontamentos impedem':'apontamento impede')+
+        ' o envio.</b>'
+      : base);
+  atualizarSeloConf(cf);
+}
+
+// mantém o número no botão Conferir em dia enquanto a gerente edita
+function atualizarSeloConf(cf){
+  const b=$('#btConf'); if(!b) return;
+  cf=cf||resumoConf();
+  const em=b.querySelector('.cfn');
+  if(!em) return;
+  em.className='cfn'+(cf.bloq?' ruim':(cf.aviso?'':' ok'));
+  em.textContent = cf.bloq ? cf.bloq : (cf.aviso ? cf.aviso : '✓');
 }
 
 function atualizarSelLoja(){
@@ -2125,6 +2401,10 @@ async function init(){
   $$('.bnav-btn').forEach(b=>b.onclick=()=>mostrarTela(b.dataset.tela));
   $('#btSalvar').onclick=()=>salvar(null);
   $('#btEnviar').onclick=()=>{
+    // escala com regra quebrada não vai para o gestor
+    const r=conferirEscala();
+    if(r.filter(travaEnvio).length){ abrirConferencia(true); return; }
+    if(r.length){ abrirConferencia(true); return; }   // só avisos: confirma na janela
     if(!confirm('Enviar a escala de '+MESES[+mes.split('-')[1]-1].toLowerCase()+' para validação?')) return;
     salvar('ENVIADA');
   };
