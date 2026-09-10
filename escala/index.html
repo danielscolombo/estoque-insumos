@@ -486,6 +486,52 @@ table.t tr.tot td{background:var(--surface-2);font-weight:600;color:var(--ink);}
   padding:16px 20px;font-size:1rem;font-weight:600;letter-spacing:-.2px;}
 .mod-b .in{padding:18px 20px 20px;display:flex;flex-direction:column;gap:14px;}
 .mod-b p{font-size:.85rem;color:var(--ink-2);line-height:1.65;}
+.mod-b p.pat{font-size:.79rem;color:var(--muted);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:10px;padding:11px 13px;line-height:1.6;}
+.mod-b .lb{font-size:.74rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
+  color:var(--muted);margin-bottom:-8px;}
+.mod-dir{display:flex;gap:9px;justify-content:flex-end;flex-wrap:wrap;padding-top:4px;}
+.carregando{display:flex;align-items:center;gap:9px;font-size:.85rem;color:var(--muted);
+  padding:14px 0;}
+
+/* ───────── VERSÕES DA ESCALA ───────── */
+.vnum{display:inline-flex;align-items:center;font-size:.68rem;font-weight:600;letter-spacing:.7px;
+  text-transform:uppercase;color:var(--plum);background:var(--plum-soft);border-radius:6px;
+  padding:3px 9px;margin-left:2px;}
+.vlist{display:flex;flex-direction:column;gap:9px;}
+.vit{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface);
+  display:flex;flex-direction:column;gap:6px;}
+.vit.agora{border-color:var(--plum);background:var(--plum-soft);}
+.vtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.vtop b{font-size:.98rem;font-weight:600;letter-spacing:-.3px;color:var(--ink);}
+.vtop em{font-style:normal;font-size:.73rem;color:var(--muted);margin-left:auto;}
+.vtag{font-style:normal;font-size:.66rem;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  border-radius:6px;padding:3px 8px;background:var(--surface-2);color:var(--muted);}
+.vtag.VALIDADA{background:var(--vr-bg);color:var(--vr);}
+.vtag.ENVIADA{background:var(--alerta-bg);color:var(--alerta);}
+.vtag.nova{background:var(--vt-bg);color:var(--vt);}
+.vtag.saiu{background:var(--surface-2);color:var(--fer);}
+.vmot{font-size:.8rem;color:var(--ink-2);line-height:1.55;}
+.vpes{font-size:.75rem;color:var(--muted);}
+.vpes b{color:var(--ink-2);font-weight:600;}
+.vdir{display:flex;justify-content:flex-end;padding-top:3px;}
+
+/* diferenças entre duas versões */
+.dlist{display:flex;flex-direction:column;gap:10px;max-height:46vh;overflow-y:auto;
+  padding-right:2px;}
+.dit{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);}
+.dnm{padding:9px 13px;background:var(--surface-2);border-bottom:1px solid var(--line);
+  font-size:.83rem;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;
+  flex-wrap:wrap;}
+.dlin{display:grid;grid-template-columns:62px minmax(0,1fr) 16px minmax(0,1fr);align-items:center;
+  gap:7px;padding:7px 13px;font-size:.78rem;border-top:1px solid var(--line);}
+.dit .dlin:first-of-type{border-top:none;}
+.ddia{font-size:.71rem;font-weight:600;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);}
+.dde,.dpara{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border-radius:6px;
+  padding:3px 8px;font-size:.75rem;}
+.dde{background:var(--surface-2);color:var(--muted);text-decoration:line-through;}
+.dpara{background:var(--plum-soft);color:var(--plum);font-weight:600;}
+.dse{color:var(--muted);text-align:center;font-size:.8rem;}
 
 /* ───────── TOAST ───────── */
 .toast{position:fixed;left:50%;transform:translateX(-50%) translateY(14px);
@@ -934,6 +980,10 @@ let SENHA_SESSAO = '';
 // já aparece com a última cópia deste computador, mas em modo leitura —
 // assim ninguém edita uma célula que a resposta vai sobrescrever.
 let lendo = false;
+// Versões da escala. A aba Escalas guarda sempre a que vale hoje;
+// as anteriores ficam arquivadas e são lidas sob demanda.
+let VERS={};                // { "loja|mes": [ {versao,situacao,motivo,...} ] }
+let VCACHE={};              // { "loja|mes|v": { vendedora: {dia: rotulo} } }
 
 const $=s=>document.querySelector(s);
 const $$=s=>Array.from(document.querySelectorAll(s));
@@ -1106,7 +1156,7 @@ async function post(payload){
               headers:{'Content-Type':'text/plain;charset=utf-8'},body:corpo},20000);
     const j=await r.json();
     if(j && j.success===false){ toast(j.error||'Gravação recusada pelo servidor'); return false; }
-    return true;
+    return j||true;   // objeto quando dá para ler a resposta; true quando foi às cegas
   }catch(e){
     // navegador bloqueou a leitura: manda às cegas, como era antes
     try{ await fetchTO(SCRIPT_URL,{method:'POST',mode:'no-cors',body:corpo},18000); return true; }
@@ -1521,6 +1571,179 @@ async function mudarSit(nova,quem,aviso){
   carregarStatus().then(()=>{ renderSit(); });
 }
 
+// ═══════════════════════════════════════════════════
+// VERSÕES DA ESCALA
+// A escala validada nunca é editada por cima. Quando a gerente pede
+// para alterar, a versão que valia é arquivada inteira e o mês volta
+// a ficar aberto como uma versão nova. O histórico fica todo aqui.
+// ═══════════════════════════════════════════════════
+function versaoAtual(){
+  const v=parseInt((STATUS[chave()]||{}).versao,10);
+  return (v&&v>0)?v:1;
+}
+function motivoAtual(){ return String((STATUS[chave()]||{}).motivo||''); }
+
+// ─── janela (modal)
+function abrirMod(titulo,html){
+  $('#modTit').innerHTML=titulo;
+  $('#modIn').innerHTML=html;
+  $('#mod').hidden=false;
+}
+function fecharMod(){ $('#mod').hidden=true; $('#modIn').innerHTML=''; }
+$('#mod').addEventListener('click',e=>{ if(e.target.id==='mod') fecharMod(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('#mod').hidden) fecharMod(); });
+
+// ─── pedir alteração: arquiva a versão que vale e abre a próxima
+function pedirAlteracao(){
+  const prox=versaoAtual()+1;
+  abrirMod('Alterar a escala de '+esc(rotMes(mes)),
+    '<p>A escala <b>v'+versaoAtual()+'</b> que está valendo não vai ser apagada. '+
+    'Ela é guardada inteira no histórico e o mês reabre como <b>v'+prox+'</b> para você editar. '+
+    'Quando terminar, envie para o gestor validar — só a partir daí a v'+prox+' passa a valer.</p>'+
+    '<p class="pat">Os benefícios já pagos continuam valendo pela versão anterior. '+
+    'Depois de validar a v'+prox+', o Painel de Benefícios mostra o acerto de cada pessoa.</p>'+
+    '<label class="lb">Por que está alterando?</label>'+
+    '<input class="fld" id="inMotivo" maxlength="140" '+
+      'placeholder="ex.: atestado da Ana no dia 12" autocomplete="off">'+
+    '<div class="mod-dir"><button class="bt bt-ghost" id="btCanc">Cancelar</button>'+
+    '<button class="bt" id="btOkAlt">Abrir a v'+prox+'</button></div>');
+  setTimeout(()=>{ const i=$('#inMotivo'); if(i) i.focus(); },60);
+  $('#btCanc').onclick=fecharMod;
+  $('#btOkAlt').onclick=async()=>{
+    const motivo=($('#inMotivo').value||'').trim();
+    if(!motivo){ toast('Escreva o motivo da alteração'); $('#inMotivo').focus(); return; }
+    const b=$('#btOkAlt'); b.disabled=true; b.textContent='Abrindo…';
+    const r=await post({action:'novaVersao',loja:loja,mes:mes,por:admin?'gestor':'gerente',motivo:motivo});
+    if(!r){ b.disabled=false; b.textContent='Abrir a v'+prox; toast('Não consegui abrir a versão nova'); return; }
+    fecharMod();
+    VERS[chave()]=null;
+    await carregarStatus();
+    renderEscala(); travaSalvar();
+    toast('Escala aberta como v'+(r.versao||prox)+' — pode editar');
+  };
+}
+
+// ─── histórico
+async function lerVersoes(){
+  const k=chave();
+  if(VERS[k]) return VERS[k];
+  const r=await fetchTO(SCRIPT_URL+'?action=versoes&loja='+encodeURIComponent(loja)+
+                        '&mes='+encodeURIComponent(mes),{redirect:'follow'},20000);
+  const j=await r.json();
+  VERS[k]=j.versoes||[];
+  return VERS[k];
+}
+async function lerVersao(v){
+  const k=chave()+'|'+v;
+  if(VCACHE[k]) return VCACHE[k];
+  const r=await fetchTO(SCRIPT_URL+'?action=versao&loja='+encodeURIComponent(loja)+
+                        '&mes='+encodeURIComponent(mes)+'&v='+v,{redirect:'follow'},20000);
+  const j=await r.json();
+  const m={};
+  (j.escala||[]).forEach(l=>{ m[l.vendedora]=l.dias||{}; });
+  VCACHE[k]=m;
+  return m;
+}
+
+async function abrirHistorico(){
+  abrirMod('Histórico da escala',
+    '<div class="carregando"><span class="giro"></span> lendo as versões…</div>');
+  let lista;
+  try{ lista=await lerVersoes(); }
+  catch(e){ $('#modIn').innerHTML='<p>Não consegui ler o histórico agora. Tente de novo daqui a pouco.</p>'+
+      '<div class="mod-dir"><button class="bt" onclick="fecharMod()">Fechar</button></div>'; return; }
+  const atual=versaoAtual();
+  let h='<p>Cada alteração pedida guarda a escala inteira que estava valendo. '+
+        'Nada do que já foi validado se perde.</p><div class="vlist">';
+  h+='<div class="vit agora"><div class="vtop"><b>v'+atual+'</b>'+
+      '<span class="vtag '+sitDo()+'">'+ROT_SIT[sitDo()]+'</span>'+
+      '<em>valendo agora</em></div>'+
+      (motivoAtual()?'<div class="vmot">'+esc(motivoAtual())+'</div>':'')+
+      '<div class="vpes">'+ativas(loja).length+' pessoas na escala</div></div>';
+  lista.slice().reverse().forEach(v=>{
+    h+='<div class="vit"><div class="vtop"><b>v'+v.versao+'</b>'+
+       '<span class="vtag '+esc(v.situacao)+'">'+esc(ROT_SIT[v.situacao]||v.situacao)+'</span>'+
+       (v.arquivadaEm?'<em>arquivada em '+esc(fmtData(v.arquivadaEm))+'</em>':'')+'</div>'+
+       (v.motivo?'<div class="vmot">Substituída porque: '+esc(v.motivo)+'</div>':'')+
+       '<div class="vpes">'+v.pessoas+' pessoas'+
+         (v.validadaPor?' · validada por <b>'+esc(v.validadaPor)+'</b>':'')+'</div>'+
+       '<div class="vdir"><button class="bt q" data-cmp="'+v.versao+'">Comparar com a v'+atual+'</button></div>'+
+       '</div>';
+  });
+  h+='</div>';
+  if(!lista.length) h+='<p class="pat">Ainda não houve nenhuma alteração neste mês.</p>';
+  h+='<div class="mod-dir"><button class="bt bt-ghost" id="btFechaH">Fechar</button></div>';
+  $('#modIn').innerHTML=h;
+  $('#btFechaH').onclick=fecharMod;
+  $$('#modIn [data-cmp]').forEach(b=>{
+    b.onclick=()=>compararVersao(parseInt(b.dataset.cmp,10));
+  });
+}
+
+// ─── comparação célula a célula entre uma versão arquivada e a atual
+async function compararVersao(v){
+  const atual=versaoAtual();
+  abrirMod('v'+v+' comparada com a v'+atual,
+    '<div class="carregando"><span class="giro"></span> lendo a v'+v+'…</div>');
+  let velha;
+  try{ velha=await lerVersao(v); }
+  catch(e){ $('#modIn').innerHTML='<p>Não consegui ler a v'+v+' agora.</p>'+
+      '<div class="mod-dir"><button class="bt" onclick="fecharMod()">Fechar</button></div>'; return; }
+  const nova=ESC[chave()]||{};
+  const dif=diffEscala(velha,nova);
+  let h='';
+  if(!dif.linhas.length){
+    h='<p>As duas versões estão <b>iguais</b> — nenhum dia mudou.</p>';
+  }else{
+    h='<p><b>'+dif.total+'</b> '+(dif.total>1?'dias mudaram':'dia mudou')+
+      ' em <b>'+dif.linhas.length+'</b> '+(dif.linhas.length>1?'pessoas':'pessoa')+'.</p>';
+    h+='<div class="dlist">';
+    dif.linhas.forEach(l=>{
+      h+='<div class="dit"><div class="dnm">'+esc(l.nome)+
+         (l.novo?' <em class="vtag nova">entrou nesta versão</em>':'')+
+         (l.saiu?' <em class="vtag saiu">saiu desta versão</em>':'')+'</div>';
+      l.dias.forEach(d=>{
+        h+='<div class="dlin"><span class="ddia">dia '+pad(d.dia)+'</span>'+
+           '<span class="dde">'+(d.de?esc(d.de):'—')+'</span>'+
+           '<span class="dse">→</span>'+
+           '<span class="dpara">'+(d.para?esc(d.para):'—')+'</span></div>';
+      });
+      h+='</div>';
+    });
+    h+='</div>';
+  }
+  h+='<div class="mod-dir"><button class="bt bt-ghost" id="btVoltaH">Voltar ao histórico</button>'+
+     '<button class="bt" id="btFechaC">Fechar</button></div>';
+  $('#modTit').innerHTML='v'+v+' comparada com a v'+atual;
+  $('#modIn').innerHTML=h;
+  $('#btFechaC').onclick=fecharMod;
+  $('#btVoltaH').onclick=abrirHistorico;
+}
+
+// devolve as diferenças de dias entre dois mapas { nome: {dia: rotulo} }
+function diffEscala(a,b){
+  const nomes={};
+  Object.keys(a||{}).forEach(n=>nomes[n]=1);
+  Object.keys(b||{}).forEach(n=>nomes[n]=1);
+  const nd=diasNoMes(mes), linhas=[]; let total=0;
+  Object.keys(nomes).sort().forEach(n=>{
+    const va=(a&&a[n])||null, vb=(b&&b[n])||null;
+    const dias=[];
+    for(let d=1;d<=nd;d++){
+      const x=String((va&&va[d])||''), y=String((vb&&vb[d])||'');
+      if(x!==y) dias.push({dia:d,de:x,para:y});
+    }
+    if(dias.length){ total+=dias.length;
+      linhas.push({nome:n,dias:dias,novo:!va,saiu:!vb}); }
+  });
+  return {linhas:linhas,total:total};
+}
+
+function rotMes(m){
+  const [a,x]=String(m).split('-').map(Number);
+  return (MESES[x-1]?MESES[x-1].toLowerCase():m)+' de '+a;
+}
+
 // números do mês para o painel de cima
 function resumoMes(){
   const vs=ativas(loja), nd=diasNoMes(mes);
@@ -1569,17 +1792,25 @@ function renderSit(){
   const sit=sitDo();
   const r=resumoMes();
 
+  const v=versaoAtual();
+
   let dir='';
   if(sit==='VALIDADA')           dir+='<button class="bt bt-ghost" id="btPDF">Gerar PDF</button>'+
                                       '<button class="bt bt-ghost" id="btXLS">Gerar Excel</button>';
+  // a gerente não edita um mês validado — ela pede uma versão nova
+  if(sit==='VALIDADA')           dir+='<button class="bt" id="btAlterar">Alterar escala</button>';
+  if(v>1)                        dir+='<button class="bt bt-ghost" id="btHist">Histórico (v'+v+')</button>';
   if(admin && sit!=='VALIDADA')  dir+='<button class="bt" id="btValidar">Validar</button>';
   if(admin && sit==='VALIDADA')  dir+='<button class="bt bt-ghost" id="btReabrir">Reabrir</button>';
 
   let h='<div class="est '+sit+'">'+
     '<div class="rot">Situação do mês</div>'+
     '<div class="big"><span class="cad"></span>'+ROT_SIT[sit]+
+      (v>1?'<span class="vnum" title="Versão da escala deste mês">v'+v+'</span>':'')+
       (sit==='VALIDADA'&&!admin?'<span class="trava">fechada</span>':'')+'</div>'+
     '<div class="sub">'+EXPL_SIT[sit]+
+      (v>1?'<br>Esta é a <b>versão '+v+'</b> da escala deste mês'+
+        (motivoAtual()?' — aberta porque: <b>'+esc(motivoAtual())+'</b>':'')+'.':'')+
       (s.atualizado?'<br>Última alteração em <b>'+esc(fmtData(s.atualizado))+'</b>'+
         (s.por?' por <b>'+esc(s.por)+'</b>':'')+'.':'')+'</div>'+
     barraCobertura()+
@@ -1601,6 +1832,11 @@ function renderSit(){
   if(bp) bp.onclick=()=>gerarPDF();
   const bx=$('#btXLS');
   if(bx) bx.onclick=()=>gerarExcel();
+
+  const ba=$('#btAlterar');
+  if(ba) ba.onclick=()=>pedirAlteracao();
+  const bh=$('#btHist');
+  if(bh) bh.onclick=()=>abrirHistorico();
 
   const bv=$('#btValidar');
   if(bv) bv.onclick=async()=>{
