@@ -403,6 +403,12 @@ table.t tr.tot td{background:var(--surface-2);font-weight:600;color:var(--ink);}
 .bt-ghost:hover,.bt.q:hover{border-color:var(--plum);color:var(--plum);background:var(--surface);}
 .bt:disabled{background:var(--surface-2);color:var(--faint);border-color:var(--line);cursor:default;
   filter:none;}
+/* envio liberado pelo gestor por cima das travas */
+.bt.forca{background:var(--fer);border-color:var(--fer);color:#fff;}
+.bt.forca:disabled{background:var(--surface-2);color:var(--faint);border-color:var(--line);}
+.cf-sen{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:flex-end;width:100%;}
+.cf-sen .fld{flex:1 1 180px;max-width:260px;}
+.cf-sen small{flex:1 1 100%;text-align:right;color:var(--ink-2);font-size:.76rem;}
 
 .fld{flex:1;min-width:0;border:1px solid var(--line-2);background:var(--surface);border-radius:var(--r);
   padding:10px 12px;font-size:.88rem;font-family:inherit;color:var(--ink);}
@@ -1778,23 +1784,70 @@ function abrirConferencia(aoEnviar){
   const r=conferirEscala();
   const n=r.filter(travaEnvio).length;
   const tit = aoEnviar
-    ? (n? 'Não dá para enviar ainda' : 'Escala conferida')
+    ? (n ? (admin?'Escala com apontamentos':'Não dá para enviar ainda') : 'Escala conferida')
     : 'Conferência da escala';
-  let h=aoEnviar&&n
-    ? '<p>A escala de <b>'+esc(rotMes(mes))+'</b> tem <b>'+n+'</b> '+
-      (n>1?'apontamentos que precisam':'apontamento que precisa')+' de correção. '+
-      'Corrija e envie de novo — nada foi enviado ao gestor.</p>'
-    : '';
+  let h='';
+  if(aoEnviar&&n){
+    const qt='<b>'+n+'</b> '+(n>1?'apontamentos':'apontamento');
+    h = admin
+      ? '<p>A escala de <b>'+esc(rotMes(mes))+'</b> tem '+qt+' de regra quebrada. '+
+        'Como gestor, você pode enviar assim mesmo — o envio fica registrado no seu nome.</p>'
+      : '<p>A escala de <b>'+esc(rotMes(mes))+'</b> tem '+qt+' que '+(n>1?'precisam':'precisa')+
+        ' de correção. Corrija e envie de novo — nada foi enviado ao gestor. '+
+        'Só o gestor, com a senha, consegue enviar com apontamento em aberto.</p>';
+  }
   h+=htmlApontamentos(r);
-  h+='<div class="mod-dir">'+
-     (aoEnviar&&!n?'<button class="bt bt-ghost" id="btCfFechar">Cancelar</button>'+
-                   '<button class="bt" id="btCfEnviar">Enviar mesmo assim</button>'
-                  :'<button class="bt" id="btCfFechar">Fechar</button>')+
-     '</div>';
+  h+='<div class="mod-dir" id="cfDir"></div>';
   abrirMod(esc(tit),h);
-  $('#btCfFechar').onclick=fecharMod;
-  const be2=$('#btCfEnviar');
-  if(be2) be2.onclick=()=>{ fecharMod(); salvar('ENVIADA'); };
+  pintarCfDir(aoEnviar,n);
+}
+
+// rodapé da conferência: muda conforme é gerente ou gestor
+function pintarCfDir(aoEnviar,n){
+  const d=$('#cfDir'); if(!d) return;
+  if(!aoEnviar){ d.innerHTML='<button class="bt" id="btCfFechar">Fechar</button>'; }
+  else if(!n){ d.innerHTML='<button class="bt bt-ghost" id="btCfFechar">Cancelar</button>'+
+                           '<button class="bt" id="btCfEnviar">Enviar mesmo assim</button>'; }
+  else if(admin){ d.innerHTML='<button class="bt bt-ghost" id="btCfFechar">Cancelar</button>'+
+                              '<button class="bt forca" id="btCfForcar">Enviar assim mesmo</button>'; }
+  else{ d.innerHTML='<button class="bt bt-ghost" id="btCfFechar">Fechar</button>'+
+                    '<button class="bt" id="btCfSenha">Sou o gestor</button>'; }
+
+  const bf=$('#btCfFechar'); if(bf) bf.onclick=fecharMod;
+  const be=$('#btCfEnviar'); if(be) be.onclick=()=>{ fecharMod(); salvar('ENVIADA'); };
+  const bg=$('#btCfForcar');
+  if(bg) bg.onclick=()=>{
+    if(!confirm('Enviar a escala de '+rotMes(mes)+' com '+n+' apontamento'+(n>1?'s':'')+
+                ' em aberto?\n\nO envio vai registrado como gestor.')) return;
+    fecharMod(); salvar('ENVIADA','gestor');
+  };
+  const bs=$('#btCfSenha');
+  if(bs) bs.onclick=()=>{
+    d.innerHTML='<div class="cf-sen">'+
+      '<input class="fld" type="password" id="cfSenha" placeholder="senha do gestor" autocomplete="off">'+
+      '<button class="bt bt-ghost" id="cfSenCanc">Cancelar</button>'+
+      '<button class="bt" id="cfSenOk">Liberar</button>'+
+      '<small>com a senha, o envio segue mesmo com apontamento em aberto</small></div>';
+    const inp=$('#cfSenha'); inp.focus();
+    $('#cfSenCanc').onclick=()=>pintarCfDir(aoEnviar,n);
+    const tentar=async()=>{
+      const v=inp.value, bo=$('#cfSenOk');
+      if(!v) return;
+      bo.disabled=true; bo.textContent='Conferindo…';
+      const ok=await conferirSenha(v);
+      if(ok===true){
+        admin=true; SENHA_SESSAO=v;
+        renderSit(); travaSalvar();
+        pintarCfDir(aoEnviar,n);
+        toast('Liberado — você está como gestor');
+      }else{
+        bo.disabled=false; bo.textContent='Liberar';
+        toast(ok===null?'Sem conexão com o servidor — não dá para conferir a senha agora':'Senha incorreta');
+      }
+    };
+    $('#cfSenOk').onclick=tentar;
+    inp.addEventListener('keydown',e=>{ if(e.key==='Enter') tentar(); });
+  };
 }
 
 // resumo curto para o painel de situação
@@ -2253,16 +2306,18 @@ function linhasParaSalvar(){
   return ativas(loja).map(v=>({vendedora:v.nome,dias:m[v.nome]||{}}));
 }
 
-async function salvar(situacao){
+async function salvar(situacao,porQuem){
   if(!carregouOk){ toast('Sem conexão com a planilha — recarregue antes de salvar'); return; }
   if(!configOk){ toast('Cadastro não carregou — recarregue antes de gravar'); return; }
   // trava dura: lista de vendedoras vazia NUNCA grava, apagaria o mês inteiro
   if(!ativas(loja).length){ toast('Sem vendedoras carregadas — não vou gravar por cima da escala'); return; }
   if(bloqueada()){ toast('Escala validada — peça ao gestor para reabrir'); return; }
+  const quem = porQuem || (admin?'gestor':'gerente');
   const bt=$('#btSalvar'); bt.disabled=true; bt.textContent='Salvando…';
   const okp=await post({action:'saveEscala',loja:loja,mes:mes,linhas:linhasParaSalvar(),
-                        situacao:situacao||null,por:'gerente'});
-  if(situacao) STATUS[chave()]={situacao:situacao,atualizado:'agora',por:'gerente'};
+                        situacao:situacao||null,por:quem});
+  if(situacao) STATUS[chave()]=Object.assign({},STATUS[chave()]||{},
+                                 {situacao:situacao,atualizado:'agora',por:quem});
   sujo=false; bt.textContent='Salvo'; bt.disabled=true;
   renderSit(); travaSalvar();
   toast(okp?(situacao==='ENVIADA'?'Escala enviada para validação':'Escala salva'):'Sem conexão — guardado no celular');
@@ -2329,8 +2384,9 @@ function travaSalvar(){
   const cf=resumoConf();
   const base = sujo ? 'Há alterações <b>não salvas</b>.' : 'Tudo salvo.';
   diz(cf.bloq
-      ? base+' <b class="ruim">'+cf.bloq+' '+(cf.bloq>1?'apontamentos impedem':'apontamento impede')+
-        ' o envio.</b>'
+      ? base+' <b class="ruim">'+cf.bloq+' '+(cf.bloq>1?'apontamentos':'apontamento')+
+        (admin ? ' em aberto — só o gestor envia assim.' :
+                 (cf.bloq>1?' impedem':' impede')+' o envio.')+'</b>'
       : base);
   atualizarSeloConf(cf);
 }
@@ -2401,10 +2457,9 @@ async function init(){
   $$('.bnav-btn').forEach(b=>b.onclick=()=>mostrarTela(b.dataset.tela));
   $('#btSalvar').onclick=()=>salvar(null);
   $('#btEnviar').onclick=()=>{
-    // escala com regra quebrada não vai para o gestor
+    // escala com regra quebrada não vai para o gestor — só o gestor libera, com a senha
     const r=conferirEscala();
-    if(r.filter(travaEnvio).length){ abrirConferencia(true); return; }
-    if(r.length){ abrirConferencia(true); return; }   // só avisos: confirma na janela
+    if(r.length){ abrirConferencia(true); return; }   // quebras e avisos: decide na janela
     if(!confirm('Enviar a escala de '+MESES[+mes.split('-')[1]-1].toLowerCase()+' para validação?')) return;
     salvar('ENVIADA');
   };
