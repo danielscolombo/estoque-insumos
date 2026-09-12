@@ -1927,6 +1927,35 @@ function pedirAlteracao(){
   };
 }
 
+// ─── descartar: a alteração não vingou, volta a versão anterior
+function descartarAlteracao(){
+  const v=versaoAtual(), ant=v-1;
+  const mot=motivoAtual();
+  abrirMod('Descartar a v'+v+' de '+esc(rotMes(mes)),
+    '<p>A <b>v'+v+'</b> foi aberta'+(mot?' porque: <b>'+esc(mot)+'</b>':'')+
+    '. Se a alteração não vai acontecer, dá para jogar ela fora e a '+
+    '<b>v'+ant+'</b> volta a valer exatamente como estava.</p>'+
+    '<p class="pat"><b>O que você montou na v'+v+' se perde e não volta.</b> '+
+    'A v'+ant+' volta com a situação que tinha e o Painel de Benefícios '+
+    'segue lendo ela, sem acerto nenhum a fazer.</p>'+
+    '<div class="mod-dir"><button class="bt bt-ghost" id="btCancDesc">Cancelar</button>'+
+    '<button class="bt forca" id="btOkDesc">Descartar e voltar para a v'+ant+'</button></div>');
+  $('#btCancDesc').onclick=fecharMod;
+  $('#btOkDesc').onclick=async()=>{
+    const b=$('#btOkDesc'); b.disabled=true; b.textContent='Descartando…';
+    const r=await post({action:'descartarVersao',loja:loja,mes:mes,
+                        por:admin?'gestor':'gerente'});
+    if(!r){ b.disabled=false; b.textContent='Descartar e voltar para a v'+ant;
+            toast('Não consegui descartar — nada foi mexido'); return; }
+    fecharMod();
+    VERS[chave()]=null; VCACHE={};
+    sujo=false;
+    await carregarStatus();
+    await abrirMes();
+    toast('v'+v+' descartada — a v'+ant+' voltou a valer');
+  };
+}
+
 // ─── histórico
 async function lerVersoes(){
   const k=chave();
@@ -2108,6 +2137,8 @@ function renderSit(){
   // a gerente não edita um mês validado — ela pede uma versão nova
   if(sit==='VALIDADA')           dir+='<button class="bt" id="btAlterar">Alterar escala</button>';
   if(v>1)                        dir+='<button class="bt bt-ghost" id="btHist">Histórico (v'+v+')</button>';
+  // alteração pedida que não vingou: joga fora e volta a anterior
+  if(v>1 && sit!=='VALIDADA')    dir+='<button class="bt bt-ghost" id="btDescartar">Descartar a v'+v+'</button>';
   if(admin && sit!=='VALIDADA')  dir+='<button class="bt" id="btValidar">Validar</button>';
   if(admin && sit==='VALIDADA')  dir+='<button class="bt bt-ghost" id="btReabrir">Reabrir</button>';
 
@@ -2147,6 +2178,8 @@ function renderSit(){
   if(ba) ba.onclick=()=>pedirAlteracao();
   const bh=$('#btHist');
   if(bh) bh.onclick=()=>abrirHistorico();
+  const bd=$('#btDescartar');
+  if(bd) bd.onclick=()=>descartarAlteracao();
 
   const bv=$('#btValidar');
   if(bv) bv.onclick=async()=>{
