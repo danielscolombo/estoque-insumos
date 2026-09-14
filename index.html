@@ -542,7 +542,7 @@ async function lerComPaciencia(url, tentativas){
   const n = tentativas || 2;
   for (let i=0; i<n; i++){
     try{
-      const r = await fetchComTimeout(url, {redirect:'follow'}, 25000);
+      const r = await fetchComTimeout(url, {redirect:'follow'}, 20000);
       return await r.json();
     }catch(e){
       if (i < n-1) await new Promise(s=>setTimeout(s, 900));
@@ -645,12 +645,24 @@ async function postLido(payload) {
 // ═══════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════
+function marcarLendo(){
+  const n = GRUPOS.reduce((a,g)=>a+g.itens.length,0);
+  const q = _quandoCfg();
+  document.getElementById('hdrSub').textContent =
+    (n ? LOJAS.length+' loja(s) · '+n+' insumos · ' : '') +
+    (q ? 'lendo a planilha…' : 'lendo a planilha…');
+}
+
 async function init() {
   document.getElementById('fData').value = new Date().toISOString().slice(0,10);
-  // Restaurar estado ativo/inativo antes de montar a tela
-  _restoreAtivo(GRUPOS);
+  // Pinta na hora com a ultima leitura boa deste aparelho. Quem abre nao
+  // fica esperando o Google acordar; a planilha corrige quando responder.
+  const c = _lerCfgGuardada();
+  if (c) { GRUPOS = c.grupos; if (c.lojas && c.lojas.length) LOJAS = c.lojas; }
+  else { _restoreAtivo(GRUPOS); }
   populateSelects();
   buildForm();
+  marcarLendo();
   // Carrega config e entradas em paralelo, sem bloquear a tela
   fetchConfig().then(()=>{ populateSelects(); buildForm(); if(_loaded) updateHdrSub(); });
   fetchEntries();
