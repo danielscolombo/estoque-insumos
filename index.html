@@ -543,10 +543,20 @@ async function fetchConfig() {
   try {
     const r = await fetchComTimeout(SCRIPT_URL + '?action=config', {redirect:'follow'});
     const j = await r.json();
-    if (j.grupos && j.grupos.length) { GRUPOS = j.grupos; }
+    if (j.grupos && j.grupos.length) {
+      GRUPOS = j.grupos;
+      // veio da planilha: ela manda. Guardo so para a proxima abertura pintar certo.
+      _guardarAtivo(GRUPOS);
+      return;
+    }
     if (j.lojas  && j.lojas.length)  { LOJAS  = j.lojas;  }
   } catch(e) { /* usar defaults silenciosamente */ }
   _restoreAtivo(GRUPOS);
+}
+
+function _guardarAtivo(grupos){
+  try{ const m={}; grupos.forEach(g=>{ m[g.id]=g.ativo!==false; });
+       localStorage.setItem('gruposAtivo',JSON.stringify(m)); }catch(e){}
 }
 
 // Normaliza qualquer formato de data para AAAA-MM-DD (corrige datas que vêm
@@ -583,6 +593,17 @@ async function postData(payload) {
     await fetchComTimeout(SCRIPT_URL,{method:'POST',mode:'no-cors',body:JSON.stringify(payload)},15000);
     return true;
   } catch(e){ return false; }
+}
+
+// Mesmo POST, mas lendo a resposta. text/plain evita o preflight que o
+// Apps Script nao sabe responder. Devolve null se nao der para ler.
+async function postLido(payload) {
+  try {
+    const r = await fetchComTimeout(SCRIPT_URL,{method:'POST',redirect:'follow',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload)},15000);
+    return await r.json();
+  } catch(e){ return null; }
 }
 
 // ═══════════════════════════════════════════════════
@@ -755,7 +776,7 @@ function renderHist(){
 async function delEntry(id){
   const s=prompt('🔒 Digite a senha de admin para excluir:');
   if(s===null)return;
-  if(s!==getSenha()){toast('❌ Senha incorreta','err');return;}
+  if(!(await conferirSenha(s))){toast('❌ Senha incorreta','err');return;}
   if(!confirm('Excluir este registro?'))return;
   await postData({action:'delete',id});
   _entries=_entries.filter(e=>e.id!==id);
@@ -876,9 +897,21 @@ function abrirSenha(){
 }
 function fecharSenha(){ document.getElementById('overlayPass').classList.add('hidden'); }
 
-function verificarSenha(){
+// A senha vale para a rede toda: quem decide e a planilha.
+// So caio no localStorage se a planilha nao responder.
+async function conferirSenha(v){
+  const r=await postLido({action:'login',senha:v});
+  if(r && typeof r.success==='boolean') return r.success;
+  return v===getSenha();
+}
+
+async function verificarSenha(){
   const v=document.getElementById('passInput').value;
-  if(v===getSenha()){ fecharSenha(); abrirAdmin(); }
+  const bt=document.querySelector('#overlayPass .btn-prim');
+  if(bt){ bt.disabled=true; bt.textContent='Conferindo…'; }
+  const ok=await conferirSenha(v);
+  if(bt){ bt.disabled=false; bt.textContent='Entrar'; }
+  if(ok){ try{localStorage.setItem('adminSenha',v);}catch(e){} fecharSenha(); abrirAdmin(); }
   else { document.getElementById('passErro').style.display='block'; }
 }
 
@@ -1103,15 +1136,17 @@ function renderAdminSenha(body,foot){
     <button class="btn-sec" onclick="fecharAdmin()">Cancelar</button>
     <button class="btn-prim" onclick="salvarSenha()">🔑 Alterar Senha</button>`;
 }
-function salvarSenha(){
+async function salvarSenha(){
   const atual=document.getElementById('senhaAtual').value;
   const nova=document.getElementById('senhaNova').value;
   const conf=document.getElementById('senhaConfirma').value;
-  if(atual!==getSenha()){toast('❌ Senha atual incorreta','err');return;}
   if(nova.length<4){toast('❌ Nova senha deve ter ao menos 4 caracteres','err');return;}
   if(nova!==conf){toast('❌ As senhas não coincidem','err');return;}
-  localStorage.setItem('adminSenha',nova);
-  toast('✅ Senha alterada com sucesso!','ok');
+  const r=await postLido({action:'setSenha',atual:atual,nova:nova});
+  if(!r){toast('❌ Sem conexão — a senha vale para todos, então precisa ir para a planilha','err');return;}
+  if(!r.success){toast('❌ '+(r.error||'Senha atual incorreta'),'err');return;}
+  try{localStorage.setItem('adminSenha',nova);}catch(e){}
+  toast('✅ Senha alterada para todas as lojas!','ok');
   fecharAdmin();
 }
 
@@ -1119,13 +1154,12 @@ function salvarSenha(){
 async function salvarConfig(){
   const btn=document.getElementById('btnSaveConfig');
   if(btn){btn.disabled=true;btn.innerHTML='<div class="spin" style="width:16px;height:16px;border-width:2px;"></div> Salvando…';}
-  const payload={action:'saveConfig',grupos:_adminGrupos,lojas:_adminLojas};
+  const payload={action:'saveConfig',grupos:_adminGrupos,lojas:_adminLojas,senha:getSenha()};
   const ok=await postData(payload);
   if(ok){
     GRUPOS=[..._adminGrupos.map(g=>({...g,itens:[...g.itens]}))];
     LOJAS=[..._adminLojas];
-    // Persistir estado ativo/inativo no localStorage
-    const _am={};GRUPOS.forEach(g=>{_am[g.id]=g.ativo!==false;});localStorage.setItem('gruposAtivo',JSON.stringify(_am));
+    _guardarAtivo(GRUPOS);
     populateSelects();
     buildForm();
     updateHdrSub();
