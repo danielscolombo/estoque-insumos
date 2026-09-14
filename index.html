@@ -378,6 +378,7 @@ tbody tr:hover td.s-date,tbody tr:hover td.s-loja{background:var(--surface-2)!im
       </div>
     </div>
     <div class="pad">
+      <div id="avisoEdicao" class="alert" style="display:none;background:#DBEAFE;color:#1E40AF;border-color:#93C5FD;"></div>
       <div class="alert alert-info">💡 Preencha o estoque atual. Campos em <strong style="color:var(--danger)">vermelho</strong> = abaixo do mínimo.</div>
     </div>
     <div id="formInsumos" class="pad"></div>
@@ -726,6 +727,59 @@ function chkMin(el){
 }
 
 // ═══════════════════════════════════════════════════
+// CORRIGIR UMA CONTAGEM JA LANCADA
+// So o gestor corrige: a senha e conferida na planilha.
+// Salvar por cima usa o MESMO id, entao a linha antiga e substituida
+// no lugar de virar uma segunda contagem do mesmo dia.
+// ═══════════════════════════════════════════════════
+let _editando = null;
+
+async function editarEntry(id){
+  const e=_entries.find(x=>String(x.id)===String(id));
+  if(!e){toast('❌ Não achei essa contagem','err');return;}
+  const s=prompt('🔒 Senha de admin para corrigir a contagem de '+e.loja+' de '+fmtDate(e.data)+':');
+  if(s===null)return;
+  if(!(await conferirSenha(s))){toast('❌ Senha incorreta','err');return;}
+  _editando=String(id);
+  document.getElementById('fLoja').value=e.loja;
+  document.getElementById('fData').value=e.data;
+  document.querySelectorAll('[data-g][data-i]').forEach(el=>{
+    const v=e.insumos[`${el.dataset.g}||${el.dataset.i}`];
+    el.value=(v===null||v===undefined)?'':v;
+    chkMin(el);
+  });
+  pintarEdicao();
+  goTab('form');
+  toast('✏️ Corrigindo a contagem de '+e.loja,'info');
+}
+
+function pintarEdicao(){
+  const b=document.getElementById('avisoEdicao');
+  const bt=document.getElementById('btnSave');
+  if(_editando){
+    const e=_entries.find(x=>String(x.id)===String(_editando));
+    if(b){
+      b.style.display='';
+      b.innerHTML='✏️ <strong>Corrigindo</strong> a contagem de '+(e?e.loja:'')+
+        ' de '+(e?fmtDate(e.data):'')+'. Ao salvar, ela é substituída. '+
+        '<button onclick="cancelarEdicao()" style="border:none;background:#fff;color:#1E40AF;'+
+        'padding:3px 10px;border-radius:6px;cursor:pointer;font-size:.75rem;font-weight:700;margin-left:6px;">Cancelar</button>';
+    }
+    if(bt) bt.innerHTML='💾 Salvar Correção';
+  }else{
+    if(b){ b.style.display='none'; b.innerHTML=''; }
+    if(bt) bt.innerHTML='💾 Salvar Abastecimento';
+  }
+}
+
+function cancelarEdicao(){
+  _editando=null;
+  zerarForm();
+  pintarEdicao();
+  toast('Correção cancelada','info');
+}
+
+// ═══════════════════════════════════════════════════
 // SAVE ENTRY
 // ═══════════════════════════════════════════════════
 async function salvar(){
@@ -737,18 +791,35 @@ async function salvar(){
   document.querySelectorAll('[data-g][data-i]').forEach(el=>{
     insumos[`${el.dataset.g}||${el.dataset.i}`]=el.value!==''?parseInt(el.value):null;
   });
-  const entry={id:Date.now()+'',loja,data,insumos};
+  let id = _editando;
+  // nao estou corrigindo, mas ja existe contagem dessa loja nesse dia:
+  // em vez de duplicar, substitui — e isso e ato de gestor.
+  if(!id){
+    const rep=_entries.find(x=>x.loja===loja && x.data===data);
+    if(rep){
+      const s=prompt('Já existe contagem desta loja em '+fmtDate(data)+
+        '.\nPara substituir, digite a senha de admin:');
+      if(s===null){toast('Nada foi salvo','info');return;}
+      if(!(await conferirSenha(s))){toast('❌ Senha incorreta — nada foi salvo','err');return;}
+      id=String(rep.id);
+    }
+  }
+  if(!id) id=Date.now()+'';
+  const entry={id:id,loja,data,insumos};
   const btn=document.getElementById('btnSave');
+  const corrigindo=!!_editando || _entries.some(x=>String(x.id)===String(id));
   btn.disabled=true;
   btn.innerHTML='<div class="spin" style="width:18px;height:18px;border-width:2px;border-color:rgba(255,255,255,.3);border-top-color:#fff;"></div> Salvando…';
   const ok=await postData(entry);
-  btn.disabled=false;btn.innerHTML='💾 Salvar Abastecimento';
+  btn.disabled=false;
   if(ok){
+    _entries=_entries.filter(x=>String(x.id)!==String(id));
     _entries.push(entry);
     localStorage.setItem('lastLoja',loja);
-    toast('✅ Abastecimento salvo!','ok');
-    zerarForm();updateHdrSub();
-  } else toast('❌ Erro ao salvar. Tente novamente.','err');
+    _editando=null;
+    toast(corrigindo?'✅ Contagem corrigida!':'✅ Abastecimento salvo!','ok');
+    zerarForm();pintarEdicao();updateHdrSub();
+  } else { pintarEdicao(); toast('❌ Erro ao salvar. Tente novamente.','err'); }
 }
 
 function zerarForm(){
@@ -786,11 +857,9 @@ function renderHist(){
   let ents=[..._entries];
   if(lF)ents=ents.filter(e=>e.loja===lF);
   if(mF)ents=ents.filter(e=>e.data.startsWith(mF));
-  ents=ents.filter(e=>e.data);ents.sort((a,b)=>(b.data||'').localeCompare(a.data||''));
-  // mostrar apenas o estoque da última data preenchida de cada loja
-  const _ult={};
-  ents.forEach(e=>{ if(!_ult[e.loja] || (e.data||'')>(_ult[e.loja].data||'')) _ult[e.loja]=e; });
-  ents=Object.values(_ult).sort((a,b)=>(b.data||'').localeCompare(a.data||''));
+  // todas as contagens, da mais nova para a mais antiga
+  ents=ents.filter(e=>e.data).sort((a,b)=>
+    (b.data||'').localeCompare(a.data||'') || String(a.loja).localeCompare(String(b.loja)));
   const wrap=document.getElementById('histContent');
   if(!ents.length){wrap.innerHTML=emptyEl('📭','Nenhum registro','Registre o primeiro abastecimento.');return;}
   const lojas=new Set(ents.map(e=>e.loja));
@@ -813,7 +882,8 @@ function renderHist(){
             if(v!=null&&v!=undefined){if(v<i.min){sym='<span style="font-size:.65rem"> 🔴</span>';sty='color:var(--danger);font-weight:700;'}else if(v<i.min*1.5){sym='<span style="font-size:.65rem"> 🟡</span>';sty='color:var(--warn);font-weight:600;'}else{sym='<span style="font-size:.65rem"> 🟢</span>';}}
             return `<td style="${sty}">${v===null||v===undefined?'—':v}${sym}</td>`;
           }).join('')}
-          <td><button onclick="delEntry('${e.id}')"
+          <td style="white-space:nowrap;"><button onclick="editarEntry('${e.id}')" title="Corrigir esta contagem"
+            style="border:none;background:#DBEAFE;color:#1E40AF;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:.75rem;font-weight:700;margin-right:4px;">✏️</button><button onclick="delEntry('${e.id}')" title="Excluir esta contagem"
             style="border:none;background:#FEE2E2;color:#991B1B;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:.75rem;font-weight:700;">🗑️</button></td>
         </tr>`).join('')}
       </tbody></table></div>
