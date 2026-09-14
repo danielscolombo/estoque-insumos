@@ -535,23 +535,57 @@ function fetchComTimeout(url, opts={}, ms=10000) {
     .finally(()=>clearTimeout(timer));
 }
 
+// O Apps Script hiberna quando fica parado. A primeira chamada do dia
+// pode levar 10, 15 segundos — por isso a paciencia maior e a segunda
+// tentativa antes de desistir.
+async function lerComPaciencia(url, tentativas){
+  const n = tentativas || 2;
+  for (let i=0; i<n; i++){
+    try{
+      const r = await fetchComTimeout(url, {redirect:'follow'}, 25000);
+      return await r.json();
+    }catch(e){
+      if (i < n-1) await new Promise(s=>setTimeout(s, 900));
+    }
+  }
+  return null;
+}
+
+// Guarda a ultima leitura boa do cadastro. Se a planilha nao responder,
+// e ela que vale — nunca a lista velha que esta escrita neste arquivo.
+function _guardarCfg(grupos, lojas){
+  try{ localStorage.setItem('cfgInsumos', JSON.stringify(
+        {grupos:grupos, lojas:lojas, quando:new Date().toISOString()})); }catch(e){}
+}
+function _lerCfgGuardada(){
+  try{ const c=JSON.parse(localStorage.getItem('cfgInsumos')||'null');
+       return (c && c.grupos && c.grupos.length) ? c : null; }catch(e){ return null; }
+}
+function _quandoCfg(){
+  const c=_lerCfgGuardada(); if(!c || !c.quando) return '';
+  const d=new Date(c.quando); if(isNaN(d)) return '';
+  return d.toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})+' '+
+         d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+}
+
 function _restoreAtivo(grupos){
   try{const m=JSON.parse(localStorage.getItem('gruposAtivo')||'{}');grupos.forEach(g=>{if(g.id in m)g.ativo=m[g.id];});}catch(e){}
 }
 
 async function fetchConfig() {
-  try {
-    const r = await fetchComTimeout(SCRIPT_URL + '?action=config', {redirect:'follow'});
-    const j = await r.json();
-    if (j.grupos && j.grupos.length) {
-      GRUPOS = j.grupos;
-      // veio da planilha: ela manda. Guardo so para a proxima abertura pintar certo.
-      _guardarAtivo(GRUPOS);
-      return;
-    }
-    if (j.lojas  && j.lojas.length)  { LOJAS  = j.lojas;  }
-  } catch(e) { /* usar defaults silenciosamente */ }
-  _restoreAtivo(GRUPOS);
+  const j = await lerComPaciencia(SCRIPT_URL + '?action=config');
+  if (j && ((j.grupos && j.grupos.length) || (j.lojas && j.lojas.length))) {
+    if (j.grupos && j.grupos.length) GRUPOS = j.grupos;   // a planilha manda
+    if (j.lojas  && j.lojas.length)  LOJAS  = j.lojas;
+    _guardarAtivo(GRUPOS);
+    _guardarCfg(GRUPOS, LOJAS);
+    return true;
+  }
+  // nao respondeu: vale a ultima leitura boa deste aparelho
+  const c = _lerCfgGuardada();
+  if (c) { GRUPOS = c.grupos; if (c.lojas && c.lojas.length) LOJAS = c.lojas; }
+  else { _restoreAtivo(GRUPOS); }
+  return false;
 }
 
 function _guardarAtivo(grupos){
@@ -576,16 +610,18 @@ function normData(d){
 }
 
 async function fetchEntries() {
-  try {
-    const r = await fetchComTimeout(SCRIPT_URL, {redirect:'follow'});
-    const j = await r.json();
-    _entries = (j.entries || []).map(e => ({...e, data: normData(e.data)}));
-    _loaded  = true;
+  const j = await lerComPaciencia(SCRIPT_URL);
+  _loaded = true;
+  if (j && Array.isArray(j.entries)) {
+    _entries = j.entries.map(e => ({...e, data: normData(e.data)}));
     updateHdrSub();
-  } catch(e) {
-    _loaded = true;
-    document.getElementById('hdrSub').textContent = 'Sem conexão — usando dados locais';
+    return true;
   }
+  const q = _quandoCfg();
+  document.getElementById('hdrSub').textContent =
+    q ? ('Sem conexão — mostrando o cadastro lido em ' + q)
+      : 'Sem conexão — a planilha não respondeu';
+  return false;
 }
 
 async function postData(payload) {
@@ -616,7 +652,7 @@ async function init() {
   populateSelects();
   buildForm();
   // Carrega config e entradas em paralelo, sem bloquear a tela
-  fetchConfig().then(()=>{ populateSelects(); buildForm(); });
+  fetchConfig().then(()=>{ populateSelects(); buildForm(); if(_loaded) updateHdrSub(); });
   fetchEntries();
 }
 
