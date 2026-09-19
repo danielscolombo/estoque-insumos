@@ -282,6 +282,33 @@ table.gr select.g.FOLGA        {background:var(--t-fo);color:var(--t-fo-i);font-
 table.gr select.g.AUSENCIA     {background:var(--t-au);color:var(--t-au-i);font-family:inherit;
   font-weight:500;letter-spacing:.4px;font-size:.68rem;}
 
+/* ───────── VISTA RESUMO (só a sigla) ─────────
+   Sete colunas de uma letra cabem em 360px, então a semana inteira
+   aparece de uma vez — no celular também, sem rolar de lado. */
+.tbw.sw{overflow-x:visible;}
+table.gr.sig{width:100%;table-layout:fixed;}
+table.gr.sig th.nm,table.gr.sig td.nm{position:static;min-width:0;max-width:none;width:23%;}
+table.gr.sig th:not(.nm),table.gr.sig td:not(.nm){width:11%;}
+table.gr.sig td.cel{min-width:0;padding:3px 2px;}
+table.gr.sig td.cel.hj{box-shadow:inset 0 0 0 2px var(--plum-soft);}
+table.gr.sig td.nm{font-size:.72rem;padding:0 8px;}
+table.gr.sig .sg{display:block;border-radius:7px;padding:10px 0;text-align:center;
+  font-family:'Archivo',sans-serif;font-size:.8rem;font-weight:600;letter-spacing:.5px;
+  color:var(--faint);white-space:nowrap;overflow:hidden;}
+table.gr.sig .sg.ABERTURA     {background:var(--t-ab);color:var(--t-ab-i);}
+table.gr.sig .sg.INTERMEDIARIO{background:var(--t-in);color:var(--t-in-i);}
+table.gr.sig .sg.FECHAMENTO   {background:var(--t-fe);color:var(--t-fe-i);}
+table.gr.sig .sg.DOMINGO      {background:var(--t-do);color:var(--t-do-i);}
+table.gr.sig .sg.FOLGA        {background:var(--t-fo);color:var(--t-fo-i);}
+table.gr.sig .sg.AUSENCIA     {background:var(--t-au);color:var(--t-au-i);}
+@media (max-width:400px){
+  table.gr.sig td.nm{font-size:.66rem;padding:0 5px;}
+  table.gr.sig .sg{font-size:.74rem;padding:9px 0;letter-spacing:0;}
+}
+/* a legenda do Resumo traz a sigla na frente do horário */
+.legend .lg u{display:inline-block;min-width:1.5em;margin-right:6px;text-decoration:none;font-weight:700;
+  text-align:center;}
+
 table.gr tr.cob td{background:var(--surface-2);font-family:'IBM Plex Mono',ui-monospace,monospace;
   font-variant-numeric:tabular-nums;font-size:.82rem;font-weight:500;text-align:center;padding:7px 2px;
   color:var(--ink);border-bottom:0;}
@@ -423,6 +450,12 @@ table.t tr.tot td{background:var(--surface-2);font-weight:600;color:var(--ink);}
                    linear-gradient(135deg,var(--muted) 50%,transparent 50%);
   background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;
   background-size:5px 5px,5px 5px;background-repeat:no-repeat;}
+
+/* sigla que aparece na vista Resumo */
+.fld.sig{flex:0 0 70px;text-align:center;text-transform:uppercase;font-weight:600;letter-spacing:1px;
+  padding:10px 4px;font-size:.82rem;}
+.dica{margin:0 0 4px;font-size:.8rem;line-height:1.55;color:var(--muted);}
+.dica b{color:var(--ink-2);font-weight:600;}
 
 .tog{flex-shrink:0;border:1px solid var(--line-2);background:var(--surface);border-radius:var(--r);
   padding:7px 13px;font-size:.7rem;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
@@ -674,6 +707,7 @@ table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-w
     <div class="barra">
       <b>Escala do mês</b>
       <div class="vista" id="vista">
+        <button data-v="resumo">Resumo</button>
         <button data-v="grade" class="on">Grade</button>
         <button data-v="dia">Por dia</button>
       </div>
@@ -994,17 +1028,17 @@ const ROT_TIPO={ABERTURA:'Abertura',INTERMEDIARIO:'Intermediário',FECHAMENTO:'F
 
 const DEFAULT_LOJAS=['TUCURUVI','BOM RETIRO','PENHA','MOOCA','MAUÁ','LAPA','SBC','SCS','SÃO CAETANO CENTRO'];
 const DEFAULT_TURNOS=[
-  {entrada:'09:30',saida:'18:06',tipo:'ABERTURA'},
-  {entrada:'12:00',saida:'20:36',tipo:'INTERMEDIARIO'},
-  {entrada:'13:24',saida:'22:00',tipo:'FECHAMENTO'},
-  {entrada:'12:00',saida:'19:00',tipo:'DOMINGO'},
-  {entrada:'13:00',saida:'20:00',tipo:'DOMINGO'}
+  {entrada:'09:30',saida:'18:06',tipo:'ABERTURA',sigla:'A'},
+  {entrada:'12:00',saida:'20:36',tipo:'INTERMEDIARIO',sigla:'I'},
+  {entrada:'13:24',saida:'22:00',tipo:'FECHAMENTO',sigla:'F'},
+  {entrada:'12:00',saida:'19:00',tipo:'DOMINGO',sigla:'D'},
+  {entrada:'13:00',saida:'20:00',tipo:'DOMINGO',sigla:'D2'}
 ];
 const DEFAULT_AUS=[
-  {rotulo:'FOLGA',tipo:'FOLGA'},
-  {rotulo:'FOLGA FERIADO',tipo:'FOLGA'},
-  {rotulo:'FOLGA BANCO DE HORAS',tipo:'FOLGA'},
-  {rotulo:'FÉRIAS',tipo:'AUSENCIA'}
+  {rotulo:'FOLGA',tipo:'FOLGA',sigla:'FG'},
+  {rotulo:'FOLGA FERIADO',tipo:'FOLGA',sigla:'FF'},
+  {rotulo:'FOLGA BANCO DE HORAS',tipo:'FOLGA',sigla:'BH'},
+  {rotulo:'FÉRIAS',tipo:'AUSENCIA',sigla:'FE'}
 ];
 
 let LOJAS=DEFAULT_LOJAS.slice();
@@ -1038,9 +1072,45 @@ function cadLoja(l){
   if(!c.vendedoras) c.vendedoras=[];
   if(!c.turnos||!c.turnos.length) c.turnos=DEFAULT_TURNOS.slice();
   if(!c.ausencias||!c.ausencias.length) c.ausencias=DEFAULT_AUS.slice();
+  if(c.turnos.some(t=>!norm(t.sigla))||c.ausencias.some(a=>!norm(a.sigla))) completarSiglas(c);
   return c;
 }
 const rot=t=>t.entrada+' - '+t.saida;
+
+// ── SIGLAS
+// Na vista Resumo cada horário vira uma letra, para a semana inteira
+// caber na tela do celular sem rolar. A sigla fica no cadastro; quem
+// não tiver uma ganha a automática — a inicial do tipo, com número
+// quando o mesmo tipo se repete (dois turnos de domingo: D e D2).
+const SIG_TIPO={ABERTURA:'A',INTERMEDIARIO:'I',FECHAMENTO:'F',DOMINGO:'D'};
+function sigAus(rotulo){
+  const r=norm(rotulo);
+  if(/F[ÉE]RIAS/.test(r))  return 'FE';
+  if(/BANCO/.test(r))      return 'BH';
+  if(/FERIADO/.test(r))    return 'FF';
+  if(/FOLGA/.test(r))      return 'FG';
+  if(/ATESTADO/.test(r))   return 'AT';
+  if(/LICEN/.test(r))      return 'LI';
+  if(/AFAST/.test(r))      return 'AF';
+  return r.replace(/[^A-ZÀ-Ú]/g,'').slice(0,2)||'X';
+}
+function completarSiglas(c){
+  const usadas={};
+  (c.turnos||[]).forEach(t=>{ const s=norm(t.sigla); if(s) usadas[s]=1; });
+  (c.ausencias||[]).forEach(a=>{ const s=norm(a.sigla); if(s) usadas[s]=1; });
+  const novo=base=>{ let s=base,n=2; while(usadas[s]){ s=base+n; n++; } usadas[s]=1; return s; };
+  (c.turnos||[]).forEach(t=>{ if(!norm(t.sigla)) t.sigla=novo(SIG_TIPO[norm(t.tipo)]||'I'); });
+  (c.ausencias||[]).forEach(a=>{ if(!norm(a.sigla)) a.sigla=novo(sigAus(a.rotulo)); });
+}
+// a sigla de um valor da escala; horário fora do cadastro mostra a hora de entrada
+function sigDe(l,val){
+  if(!val) return '';
+  const c=cadLoja(l);
+  const t=c.turnos.find(x=>rot(x)===val);        if(t) return norm(t.sigla);
+  const a=c.ausencias.find(x=>norm(x.rotulo)===norm(val)); if(a) return norm(a.sigla);
+  const f=String(val).match(/^(\d{1,2}):/);
+  return f ? (+f[1])+'h' : norm(val).replace(/[^0-9A-ZÀ-Ú]/g,'').slice(0,3);
+}
 function classeDe(l,val){
   if(!val) return '';
   const c=cadLoja(l);
@@ -1305,6 +1375,13 @@ function renderEscala(){
   }
 
   $$('#vista button').forEach(b=>b.classList.toggle('on', b.dataset.v===VISTA));
+  if(VISTA==='resumo'){
+    alvo.innerHTML=
+      '<p class="dica" style="margin:2px 2px 0">Só leitura — cada horário aparece pela sigla. '+
+      'Para mudar alguma coisa, use <b>Grade</b> ou <b>Por dia</b>.</p>'+
+      htmlResumoSig(vs);
+    renderLegenda(); renderResumo(); return;
+  }
   if(VISTA==='grade'){ alvo.innerHTML=avisoTrava()+htmlGrade(vs); atualizar(); renderLegenda(); return; }
 
   const nd=diasNoMes(mes), hoje=new Date();
@@ -1577,6 +1654,48 @@ function htmlGrade(vs){
     sem.forEach(d=>{
       const fh=d.noMes?FER[d.dia]:null;
       h+='<td'+(d.noMes?' data-cob="'+d.dia+'"':'')+(fh?' class="fer"':'')+'>'+(d.noMes?'<b>·</b>':'')+'</td>';
+    });
+    h+='</tr></tbody></table></div></section>';
+    return h;
+  }).join('');
+}
+
+// ── VISTA RESUMO
+// A mesma escala da grade, só que cada horário vira a sua sigla. Sete
+// colunas de uma letra cabem na largura do celular, então a semana
+// inteira aparece de uma vez, sem rolar de lado. É só leitura — para
+// mudar alguma coisa, é na Grade ou no Por dia.
+function htmlResumoSig(vs){
+  const hoje=new Date(), [a,m]=mes.split('-').map(Number);
+  const ehHoje=d=>hoje.getFullYear()===a&&hoje.getMonth()+1===m&&hoje.getDate()===d;
+  const FER=feriadosDoMes(a,m,loja);
+  return semanasDoMes().map((sem,si)=>{
+    const noMes=sem.filter(d=>d.noMes);
+    let h='<section class="sem" data-sem="'+(si+1)+'">';
+    h+='<div class="sem-top"><b>Semana '+(si+1)+'</b><span>'+noMes[0].dia+' a '+noMes[noMes.length-1].dia+'</span></div>';
+    h+='<div class="tbw sw"><table class="gr sig"><thead><tr><th class="nm">NOMES</th>';
+    sem.forEach(d=>{
+      const fh=d.noMes?FER[d.dia]:null;
+      h+='<th class="'+(d.noMes?'':'fora')+(d.dow===0?' dom':'')+(fh?' fer':'')+'"'+(fh?' title="'+esc(fh)+'"':'')+'>'+DOW[d.dow]+
+         '<span class="dd">'+(d.noMes?pad(d.dia):'·')+'</span></th>';
+    });
+    h+='</tr></thead><tbody>';
+    vs.forEach(v=>{
+      h+='<tr><td class="nm" title="'+esc(v.nome)+'">'+esc(v.nome)+'</td>';
+      sem.forEach(d=>{
+        if(!d.noMes){ h+='<td class="cel fora"></td>'; return; }
+        const val=valor(v.nome,d.dia);
+        const cl=classeDe(loja,val), sg=sigDe(loja,val);
+        h+='<td class="cel'+(FER[d.dia]?' fer':'')+(ehHoje(d.dia)?' hj':'')+'">'+
+           '<b class="sg '+cl+'"'+(val?' title="'+esc(v.nome)+' · '+esc(val)+'"':'')+'>'+(esc(sg)||'·')+'</b></td>';
+      });
+      h+='</tr>';
+    });
+    h+='<tr class="cob"><td class="nm">NA LOJA</td>';
+    sem.forEach(d=>{
+      if(!d.noMes){ h+='<td></td>'; return; }
+      let n=0; vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d.dia))) n++; });
+      h+='<td'+(FER[d.dia]?' class="fer"':'')+'>'+(n||'·')+'</td>';
     });
     h+='</tr></tbody></table></div></section>';
     return h;
@@ -2209,6 +2328,19 @@ function atualizar(){
 
 function renderLegenda(){
   const c=cadLoja(loja), it=[];
+  // na vista Resumo a legenda é o dicionário das siglas — uma por horário
+  if(VISTA==='resumo'){
+    const v={ABERTURA:'ab',INTERMEDIARIO:'in',FECHAMENTO:'fe',DOMINGO:'do',FOLGA:'fo',AUSENCIA:'au'};
+    const chip=(sg,txt,t)=>'<span class="lg" style="background:var(--t-'+v[t]+');color:var(--t-'+v[t]+
+      '-i);border-color:var(--t-'+v[t]+'-b)"><u>'+esc(sg)+'</u>'+esc(txt)+'</span>';
+    let hh=c.turnos.map(t=>chip(norm(t.sigla), rot(t), TIPOS.indexOf(norm(t.tipo))>=0?norm(t.tipo):'INTERMEDIARIO')).join('')+
+           c.ausencias.map(a=>chip(norm(a.sigla), a.rotulo, norm(a.tipo)==='FOLGA'?'FOLGA':'AUSENCIA')).join('');
+    const F2=feriadosAtuais();
+    Object.keys(F2).map(Number).sort((x,y)=>x-y).forEach(d=>{
+      hh+='<span class="lg" style="background:#A62A21;color:#fff;border-color:#7E1E17">'+pad(d)+' · '+esc(F2[d])+'</span>';
+    });
+    $('#legenda').innerHTML=hh; return;
+  }
   TIPOS.forEach(t=>{ if(c.turnos.some(x=>norm(x.tipo)===t)) it.push([ROT_TIPO[t],t]); });
   if(c.ausencias.some(a=>norm(a.tipo)==='FOLGA')) it.push(['Folga','FOLGA']);
   if(c.ausencias.some(a=>norm(a.tipo)!=='FOLGA')) it.push(['Ausência','AUSENCIA']);
@@ -2282,10 +2414,14 @@ function renderCadastro(){
     :'<div class="vazio">Nenhuma vendedora.</div>')+
     '<div class="addr"><input class="fld" id="novaVend" placeholder="Nome da vendedora"><button class="bt q" id="btAddVend">Adicionar</button></div>';
 
-  $('#boxTur').innerHTML=c.turnos.map((t,i)=>
+  $('#boxTur').innerHTML=
+    '<p class="dica">A <b>sigla</b> é o que aparece na vista <b>Resumo</b> da escala — uma ou duas letras, '+
+    'para a semana inteira caber na tela do celular. Já vem preenchida; mude se quiser.</p>'+
+    c.turnos.map((t,i)=>
     '<div class="lin" data-i="'+i+'"><input class="fld hora" type="time" data-c="entrada" value="'+esc(t.entrada)+'">'+
     '<input class="fld hora" type="time" data-c="saida" value="'+esc(t.saida)+'">'+
     '<select class="fld tp" data-c="tipo">'+TIPOS.map(x=>'<option value="'+x+'"'+(norm(t.tipo)===x?' selected':'')+'>'+ROT_TIPO[x]+'</option>').join('')+'</select>'+
+    '<input class="fld sig" data-c="sigla" maxlength="3" placeholder="sigla" title="Sigla na vista Resumo" value="'+esc(norm(t.sigla))+'">'+
     '<button class="del" data-x="tur">×</button></div>').join('')+
     '<div class="addr"><button class="bt q" id="btAddTur">Adicionar horário</button></div>';
 
@@ -2293,6 +2429,7 @@ function renderCadastro(){
     '<div class="lin" data-i="'+i+'"><input class="fld" data-c="rotulo" value="'+esc(a.rotulo)+'">'+
     '<select class="fld tp" data-c="tipo"><option value="FOLGA"'+(norm(a.tipo)==='FOLGA'?' selected':'')+'>Folga</option>'+
     '<option value="AUSENCIA"'+(norm(a.tipo)!=='FOLGA'?' selected':'')+'>Ausência</option></select>'+
+    '<input class="fld sig" data-c="sigla" maxlength="3" placeholder="sigla" title="Sigla na vista Resumo" value="'+esc(norm(a.sigla))+'">'+
     '<button class="del" data-x="aus">×</button></div>').join('')+
     '<div class="addr"><button class="bt q" id="btAddAus">Adicionar</button></div>';
 
@@ -2612,6 +2749,10 @@ async function init(){
     const campo=e.target.dataset.c; if(!campo) return;
     const lin=e.target.closest('.lin'); if(!lin) return;
     const i=+lin.dataset.i, c=cadLoja(loja);
+    if(campo==='sigla'){                       // sigla é sempre em maiúscula
+      const p=e.target.selectionStart, v=norm(e.target.value).slice(0,3);
+      if(e.target.value!==v){ e.target.value=v; try{ e.target.setSelectionRange(p,p); }catch(_){} }
+    }
     if(campo==='loja'){ LOJAS[i]=e.target.value; return; }
     if(lin.parentElement.id==='boxVend') c.vendedoras[i][campo]=e.target.value;
     else if(lin.parentElement.id==='boxTur') c.turnos[i][campo]=e.target.value;
