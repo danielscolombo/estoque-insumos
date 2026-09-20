@@ -173,12 +173,13 @@ body{
 .wrap{max-width:1180px;margin:0 auto;padding:22px 20px 34px;display:flex;flex-direction:column;gap:18px;}
 @media (max-width:560px){ .wrap{padding:16px 12px 26px;gap:14px;} }
 
-/* ───────── PAINEL DE SITUAÇÃO (bloco âncora) ───────── */
-.sit{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:18px;align-items:stretch;}
-@media (max-width:820px){ .sit{grid-template-columns:1fr;} }
+/* ───────── PAINEL DE SITUAÇÃO (bloco âncora) ─────────
+   Uma faixa só: a situação do mês, os botões logo abaixo e, na
+   sequência, a escala. Sem contadores e sem gráfico no meio. */
+.sit{display:block;}
 
 .est{background:var(--surface);border:1px solid var(--line);border-radius:14px;
-  padding:20px 22px;box-shadow:var(--sombra);display:flex;flex-direction:column;gap:13px;}
+  padding:18px 22px;box-shadow:var(--sombra);display:flex;flex-direction:column;gap:11px;}
 .est .rot{font-size:.66rem;font-weight:600;letter-spacing:1.6px;text-transform:uppercase;color:var(--muted);}
 .est .big{font-size:2.1rem;font-weight:500;letter-spacing:-1.1px;line-height:1;display:flex;
   align-items:center;gap:11px;flex-wrap:wrap;}
@@ -188,31 +189,13 @@ body{
 .est.VALIDADA .big{color:var(--vr);}         .est.VALIDADA .cad{background:var(--vr);}
 .est .sub{font-size:.79rem;color:var(--muted);line-height:1.55;}
 .est .sub b{color:var(--ink-2);font-weight:500;}
-.sit-dir{display:flex;gap:9px;flex-wrap:wrap;margin-top:auto;padding-top:4px;}
+.sit-dir{display:flex;gap:9px;flex-wrap:wrap;padding-top:3px;}
 .sit-dir .bt{flex:0 1 auto;}
 
-/* cobertura por dia — uma barra por dia do mês */
-.cobg{margin-top:auto;padding-top:6px;display:flex;flex-direction:column;gap:7px;}
-.cobg-t{font-size:.62rem;font-weight:600;letter-spacing:1.3px;text-transform:uppercase;color:var(--muted);}
-.cobg-b{display:flex;align-items:flex-end;gap:2px;height:40px;}
-.cobg-b i{flex:1;min-width:3px;background:var(--plum);opacity:.32;border-radius:2px 2px 0 0;
-  transition:opacity .12s;}
-.cobg-b i:hover{opacity:.6;}
-.cobg-b i.dm{opacity:.5;}
-.cobg-b i.fe{background:var(--fer);opacity:.45;}
-.cobg-b i.zero{background:var(--fer);opacity:1;height:100% !important;border-radius:2px;}
-.cobg-l{font-size:.73rem;color:var(--muted);}
+/* aviso de dia sem ninguém na loja — só aparece quando existe */
+.cobg-l{font-size:.78rem;color:var(--muted);}
 .cobg-l b{color:var(--ink-2);font-weight:600;}
 .cobg-l b.ruim{color:var(--fer);}
-.est .sit-dir + .cobg,.est .cobg + .sit-dir{margin-top:0;}
-
-/* contagens do mês, ao lado */
-.lado{display:flex;flex-direction:column;gap:11px;}
-.mini{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:15px 18px;
-  box-shadow:var(--sombra);display:flex;align-items:center;gap:14px;}
-.mini .n{font-size:1.45rem;font-weight:500;letter-spacing:-.6px;line-height:1;min-width:42px;color:var(--ink);}
-.mini .t{font-size:.77rem;color:var(--muted);line-height:1.45;}
-.mini .t b{display:block;color:var(--ink);font-weight:600;font-size:.82rem;}
 
 .trava{display:inline-flex;align-items:center;gap:6px;font-size:.68rem;font-weight:600;
   letter-spacing:.7px;text-transform:uppercase;color:var(--vr);background:var(--vr-bg);
@@ -2206,41 +2189,6 @@ function rotMes(m){
 }
 
 // números do mês para o painel de cima
-function resumoMes(){
-  const vs=ativas(loja), nd=diasNoMes(mes);
-  let soma=0;
-  for(let d=1;d<=nd;d++){ vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d))) soma++; }); }
-  return {pessoas:vs.length,
-          media: nd?(soma/nd):0,
-          feriados:Object.keys(feriadosAtuais()).length};
-}
-
-// Quantas pessoas na loja em cada dia do mês, de um relance.
-// Dia sem ninguém aparece em vermelho — é o erro que custa caro.
-function barraCobertura(){
-  const vs=ativas(loja), nd=diasNoMes(mes);
-  if(!vs.length) return '';
-  const FER=feriadosAtuais();
-  const n=[];
-  for(let d=1;d<=nd;d++){
-    let q=0; vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d))) q++; });
-    n.push(q);
-  }
-  const max=Math.max(1,...n), min=Math.min(...n);
-  const vazios=n.filter(x=>x===0).length;
-  const barras=n.map((q,i)=>{
-    const d=i+1, dw=dataDe(mes,d).getDay();
-    const cl=q===0?' class="zero"':(FER[d]?' class="fe"':(dw===0?' class="dm"':''));
-    return '<i'+cl+' style="height:'+Math.max(6,Math.round(q/max*100))+'%" title="'+
-           pad(d)+' · '+q+' na loja"></i>';
-  }).join('');
-  return '<div class="cobg"><div class="cobg-t">Cobertura por dia</div>'+
-         '<div class="cobg-b">'+barras+'</div>'+
-         '<div class="cobg-l">'+(vazios
-            ? '<b class="ruim">'+vazios+' dia'+(vazios>1?'s':'')+' sem ninguém na loja</b>'
-            : 'mínimo <b>'+min+'</b> · máximo <b>'+max+'</b> por dia')+'</div></div>';
-}
-
 const ROT_SIT={RASCUNHO:'Rascunho',ENVIADA:'Enviada',VALIDADA:'Validada'};
 const EXPL_SIT={
   RASCUNHO:'Em edição. A gerente ainda não enviou este mês.',
@@ -2248,10 +2196,24 @@ const EXPL_SIT={
   VALIDADA:'Fechada para edição. Só o gestor reabre.'
 };
 
+// O único número que muda uma decisão é este: dia sem ninguém na loja.
+// Só aparece quando existe — o resto era enfeite e saiu.
+function avisoCobertura(){
+  const vs=ativas(loja), nd=diasNoMes(mes);
+  if(!vs.length) return '';
+  let vazios=0;
+  for(let d=1;d<=nd;d++){
+    let q=0; vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d))) q++; });
+    if(!q) vazios++;
+  }
+  if(!vazios) return '';
+  return '<div class="cobg-l"><b class="ruim">'+vazios+' dia'+(vazios>1?'s':'')+
+         ' sem ninguém na loja</b></div>';
+}
+
 function renderSit(){
   const s=STATUS[chave()]||{situacao:'RASCUNHO'};
   const sit=sitDo();
-  const r=resumoMes();
 
   const v=versaoAtual();
   const cf=(sit!=='VALIDADA'||admin) ? resumoConf() : null;
@@ -2280,17 +2242,8 @@ function renderSit(){
         (motivoAtual()?' — aberta porque: <b>'+esc(motivoAtual())+'</b>':'')+'.':'')+
       (s.atualizado?'<br>Última alteração em <b>'+esc(fmtData(s.atualizado))+'</b>'+
         (s.por?' por <b>'+esc(s.por)+'</b>':'')+'.':'')+'</div>'+
-    barraCobertura()+
+    avisoCobertura()+
     (dir?'<div class="sit-dir">'+dir+'</div>':'')+
-    '</div>';
-
-  h+='<div class="lado">'+
-    '<div class="mini"><div class="n num">'+r.media.toFixed(1).replace('.',',')+'</div>'+
-      '<div class="t"><b>Média na loja</b>pessoas por dia, no mês</div></div>'+
-    '<div class="mini"><div class="n num">'+r.pessoas+'</div>'+
-      '<div class="t"><b>Na escala</b>vendedoras ativas nesta loja</div></div>'+
-    '<div class="mini"><div class="n num">'+r.feriados+'</div>'+
-      '<div class="t"><b>Feriados</b>no mês, para esta cidade</div></div>'+
     '</div>';
 
   $('#sitBox').innerHTML=h;
