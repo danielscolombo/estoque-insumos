@@ -1567,15 +1567,13 @@ function gerarPDF(){
   setTimeout(()=>{ window.print(); document.title=antes; },80);
 }
 
+// A situação do mês já está escrita no cartão de cima, então aqui só
+// fica o aviso que ele não dá: enquanto a planilha não responde, a tela
+// é uma cópia e não aceita edição.
 function avisoTrava(){
   if(lendo)
     return '<div class="avisoTrava lendo"><span class="giro"></span> <b>Lendo a planilha…</b> '+
            'A tela abaixo é a última cópia deste computador. Assim que a planilha responder, ela se atualiza sozinha e libera a edição.</div>';
-  const sit=sitDo();
-  if(sit==='VALIDADA' && !admin)
-    return '<div class="avisoTrava">🔒 <b>Escala validada.</b> Já foi conferida e fechada pelo gestor, então não pode mais ser alterada. Se precisar corrigir alguma coisa, fale com ele para reabrir o mês.</div>';
-  if(sit==='VALIDADA' && admin)
-    return '<div class="avisoTrava">🔓 <b>Escala validada — você está com o acesso de gestor.</b> A gerente não consegue mexer. Se alterar aqui, salve em seguida; para devolver o mês para ela, use <b>Reabrir</b>.</div>';
   return '';
 }
 
