@@ -237,7 +237,7 @@ table.gr th .dd{display:block;font-family:'IBM Plex Mono',ui-monospace,monospace
   color:var(--plum);margin-top:3px;}
 table.gr th.dom{background:var(--t-do);color:var(--t-do-i);}
 table.gr th.dom .dd{color:var(--t-do-i);}
-table.gr th.fer{background:var(--fer-bg);color:var(--fer);}
+table.gr th.fer{background:var(--surface-2);color:var(--fer);}
 table.gr th.fer .dd{color:var(--fer);}
 table.gr th .fe{display:block;font-size:.5rem;font-weight:600;letter-spacing:.9px;margin-top:3px;
   color:var(--fer);}
@@ -250,7 +250,7 @@ table.gr td.nm{background:var(--surface-2);font-size:.74rem;font-weight:500;padd
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);
   border-right:1px solid var(--line-2);}
 table.gr td.cel{min-width:104px;padding:3px;background:var(--surface);}
-table.gr td.cel.fer{background:var(--fer-bg);}
+table.gr td.cel.fer{background:var(--surface-2);}
 table.gr td.cel.fora{background:var(--surface-2);}
 
 table.gr select.g{width:100%;border:1px solid transparent;background:transparent;color:var(--muted);
@@ -313,7 +313,7 @@ table.gr tr.cob td{background:var(--surface-2);font-family:'IBM Plex Mono',ui-mo
   color:var(--ink);border-bottom:0;}
 table.gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:.6rem;font-weight:600;letter-spacing:1.1px;
   text-transform:uppercase;color:var(--muted);text-align:right;padding-right:12px;}
-table.gr tr.cob td.fer{background:var(--fer-bg);color:var(--fer);}
+table.gr tr.cob td.fer{background:var(--surface-2);color:var(--ink);}
 table.gr tr:last-child td{border-bottom:0;}
 
 /* Acima do celular a semana inteira cabe na largura: as sete colunas
@@ -365,12 +365,12 @@ table.gr tr:last-child td{border-bottom:0;}
 .dia{background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden;
   box-shadow:var(--sombra);}
 .dia.dom{border-color:var(--t-do-b);}
-.dia.fer{border-color:var(--t-au-b);}
+.dia.fer{border-color:var(--line-2);}
 .dia.hoje{border-color:var(--plum);box-shadow:0 0 0 2px var(--plum-soft);}
 .dia-h{display:flex;align-items:center;gap:10px;padding:11px 18px;min-height:48px;
   background:var(--plum-soft);border-bottom:1px solid var(--line);}
 .dia.dom .dia-h{background:var(--t-do);}
-.dia.fer .dia-h{background:var(--fer-bg);}
+.dia.fer .dia-h{background:var(--surface-2);}
 .dia-h .dow{font-size:.66rem;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--plum);}
 .dia.dom .dia-h .dow{color:var(--t-do-i);}
 .dia.fer .dia-h .dow{color:var(--fer);}
@@ -644,7 +644,7 @@ table.pr-gr th b{display:block;font-family:'IBM Plex Mono',monospace;font-varian
   font-size:8.5pt;font-weight:500;color:#241A21;letter-spacing:-.2pt;margin-top:1px;}
 table.pr-gr th i{display:block;font-style:normal;font-size:4.4pt;color:#A32B25;font-weight:600;
   letter-spacing:.5pt;margin-top:1px;}
-table.pr-gr th.fer{background:#FBEEEC;color:#A32B25;}
+table.pr-gr th.fer{background:#F0ECEE;color:#A32B25;}
 table.pr-gr th.fer b{color:#A32B25;}
 table.pr-gr th.dom{background:#F7ECF1;color:#7A2E4A;}
 table.pr-gr th.dom b{color:#7A2E4A;}
@@ -652,13 +652,15 @@ table.pr-gr th.fora,table.pr-gr td.fora{background:#F5F1F3;color:#B4A9B0;}
 table.pr-gr th.fora b{color:#B4A9B0;}
 table.pr-gr th.nm,table.pr-gr td.nm{width:16%;text-align:left;padding-left:5px;font-weight:500;}
 table.pr-gr td.nm{background:#F5F1F3;font-size:6.4pt;color:#241A21;}
+/* quem trabalha não pinta a célula — assim o cinza do feriado aparece
+   por baixo. A folga é que pinta, e ganha do feriado. */
 table.pr-gr td.ABERTURA,
 table.pr-gr td.INTERMEDIARIO,
 table.pr-gr td.FECHAMENTO,
-table.pr-gr td.DOMINGO      {background:#FFFFFF;color:#241A21;}
+table.pr-gr td.DOMINGO      {color:#241A21;}
+table.pr-gr td.fer          {background:#F0ECEE;}
 table.pr-gr td.FOLGA        {background:#FBF2E1;color:#7A5518;font-weight:600;letter-spacing:.4pt;}
 table.pr-gr td.AUSENCIA     {background:#FBEEEC;color:#A32B25;font-weight:500;}
-table.pr-gr td.fer{box-shadow:inset 0 0 0 .7pt #A32B25;}
 table.pr-gr tr.cob td{background:#F5F1F3;font-family:'IBM Plex Mono',monospace;
   font-variant-numeric:tabular-nums;font-weight:500;font-size:7pt;color:#241A21;}
 table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-weight:600;
