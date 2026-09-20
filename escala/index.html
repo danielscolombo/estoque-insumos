@@ -1315,6 +1315,44 @@ async function carregarEscala(){
     }
   }
 }
+// ── O MÊS NÃO COMEÇA DO ZERO
+// Quem fechou agosto trabalhando no dia 31 já chega em setembro com a
+// sequência correndo, e a semana que cai na virada é uma semana só.
+// Por isso o conferidor lê também a escala do mês anterior — de leitura,
+// nunca de escrita: aquele mês não é editado aqui.
+const mesMenos=(m,n)=>{ const p=String(m).split('-').map(Number);
+  const d=new Date(p[0],p[1]-1-(n||1),1);
+  return d.getFullYear()+'-'+pad(d.getMonth()+1); };
+const mesMais=(m,n)=>mesMenos(m,-(n||1));
+let ANT={};                 // "loja|mesAnterior" -> já foi lido
+
+async function carregarAnterior(l,m){
+  l=l||loja; m=m||mes;
+  const am=mesMenos(m), k=l+'|'+am;
+  if(ANT[k]) return true;
+  try{ const g=localStorage.getItem('esc:'+k); if(g){ ESC[k]=JSON.parse(g); ANT[k]=true; } }catch(_){}
+  try{
+    const r=await fetchTO(SCRIPT_URL+'?action=escala&loja='+encodeURIComponent(l)+
+                          '&mes='+encodeURIComponent(am),{redirect:'follow'},20000);
+    const j=await r.json();
+    if(j && j.error) throw new Error(j.error);
+    const mm={}; (j.escala||[]).forEach(x=>{ mm[x.vendedora]=x.dias||{}; });
+    ESC[k]=mm; ANT[k]=true;
+    try{ localStorage.setItem('esc:'+k,JSON.stringify(mm)); }catch(_){}
+    return true;
+  }catch(e){ return !!ANT[k]; }
+}
+
+// os dias daquela pessoa no mês anterior (o nome pode estar escrito
+// com outra caixa/acento — casa pelo mesmo critério do resto do painel)
+function diasAnteriores(l,m,nome){
+  const e=ESC[(l||loja)+'|'+mesMenos(m||mes)];
+  if(!e) return null;
+  if(e[nome]) return e[nome];
+  const k=Object.keys(e).find(x=>norm(x)===norm(nome));
+  return k?e[k]:{};
+}
+
 async function post(payload){
   const corpo=JSON.stringify(
     (admin&&SENHA_SESSAO) ? Object.assign({},payload,{senha:SENHA_SESSAO}) : payload);
@@ -1352,6 +1390,9 @@ async function carregarTudo(){
     const m={}; (j.escala||[]).forEach(l=>{m[l.vendedora]=l.dias||{};});
     ESC[chave()]=m;
     try{ localStorage.setItem('esc:'+chave(),JSON.stringify(m)); }catch(_){}
+    // o fim do mês anterior vem logo atrás, em segundo plano: sem ele o
+    // conferidor recomeça a contar no dia 1
+    carregarAnterior().then(function(){ try{ atualizarSeloConf(); }catch(_){} });
     return true;
   }catch(e){ return false; }
 }
@@ -1800,19 +1841,43 @@ function conferirEscala(){
   const nd=diasNoMes(mes), FER=feriadosAtuais();
   const add=(nivel,regra,pessoa,texto,base)=>achados.push({nivel,regra,pessoa,texto,base});
 
+  // a virada do mês: o que já vinha de trás
+  const am=mesMenos(mes), ndA=diasNoMes(am);
+  const temAnt=!!ESC[loja+'|'+am];
+  const dm=x=>pad(x.d)+'/'+x.m.split('-')[1];      // "31/08"
+
+  // um dia atrás do outro, sem a parede do dia 1
+  function serie(nome){
+    const out=[];
+    if(temAnt){
+      const dA=diasAnteriores(loja,mes,nome)||{};
+      for(let d=1;d<=ndA;d++) out.push({m:am,d:d,v:dA[d]||''});
+    }
+    for(let d=1;d<=nd;d++) out.push({m:mes,d:d,v:valor(nome,d)});
+    return out;
+  }
+  const base0=temAnt?ndA:0;                         // onde este mês começa
+
   vs.forEach(v=>{
     const n=v.nome;
     const dia=d=>valor(n,d);
     const trab=d=>trabalha(loja,dia(d));
+    const S=serie(n);
 
-    // dias seguidos sem folga
-    let corr=0, ini=0;
-    for(let d=1;d<=nd+1;d++){
-      if(d<=nd && trab(d)){ if(!corr) ini=d; corr++; }
+    // dias seguidos sem folga — a contagem atravessa a virada do mês.
+    // Só é apontado o que encosta neste mês; o que ficou todo lá atrás
+    // já foi conferido no mês dele.
+    let corr=0, ini=-1;
+    for(let i=0;i<=S.length;i++){
+      const t = i<S.length && trabalha(loja,S[i].v);
+      if(t){ if(!corr) ini=i; corr++; }
       else{
-        if(corr>=REGRA.diasSeguidos)
-          add('grave','descanso',n,corr+' dias seguidos sem folga, de '+pad(ini)+' a '+pad(ini+corr-1)+'.',
+        if(corr>=REGRA.diasSeguidos && (ini+corr-1)>=base0){
+          const de=S[ini], ate=S[ini+corr-1];
+          add('grave','descanso',n,corr+' dias seguidos sem folga, de '+dm(de)+' a '+dm(ate)+'.'+
+              (de.m===am?' A conta vem de '+rotMes(am)+'.':''),
               'CLT art. 67 — 24h de descanso a cada semana');
+        }
         corr=0;
       }
     }
@@ -1849,49 +1914,71 @@ function conferirEscala(){
       add('atencao','jornada',n,extras.length+' dia(s) acima de 8h (maior: '+hhmm(maiorE)+', '+
           hhmm(maiorE-480)+' de extra). '+listaDias(extras),'CF art. 7º XIII — 8h por dia');
 
-    // 11h entre jornadas
+    // 11h entre jornadas — inclusive a emenda do último dia do mês
+    // anterior com o dia 1 deste.
     const curtas=[]; let pior=null;
-    for(let d=1;d<nd;d++){
-      const f1=faixaHoraria(dia(d)), f2=faixaHoraria(dia(d+1));
+    for(let i=0;i<S.length-1;i++){
+      if(i+1<base0) continue;                        // par inteiro no mês passado
+      const f1=faixaHoraria(S[i].v), f2=faixaHoraria(S[i+1].v);
       if(!f1||!f2) continue;
       const folga=(1440+f2.ini)-f1.fim;
       if(folga<REGRA.interjornada*60){
-        curtas.push(d);
-        if(!pior||folga<pior.folga) pior={folga:folga,d:d,a:dia(d),b:dia(d+1)};
+        curtas.push(dm(S[i]));
+        if(!pior||folga<pior.folga) pior={folga:folga,a:S[i],b:S[i+1]};
       }
     }
     if(curtas.length)
       add('grave','interjornada',n,curtas.length+' emenda(s) com menos de 11h de descanso. A menor tem '+
-          hhmm(pior.folga)+', entre o dia '+pad(pior.d)+' ('+pior.a+') e o dia '+pad(pior.d+1)+
-          ' ('+pior.b+'). '+listaDias(curtas,'Emendas nos dias'),
+          hhmm(pior.folga)+', entre '+dm(pior.a)+' ('+pior.a.v+') e '+dm(pior.b)+
+          ' ('+pior.b.v+'). Emendas em '+curtas.join(', ')+'.',
           'CLT art. 66 — mínimo de 11h entre jornadas');
   });
 
-  // 44h semanais — só nas semanas inteiras dentro do mês
+  // 44h semanais — a semana é a semana inteira, mesmo quando começa no
+  // mês passado. Só fica de fora a que avança para o mês seguinte, que
+  // ainda não existe para ser somada.
   let puladas=0;
+  const prox=mesMais(mes);
   const porPessoa={};
+  // cada dia da semana resolvido no mês certo: o que vem antes do dia 1
+  // é do mês anterior, o que vem depois do último dia é do seguinte
+  const resolver=sem=>{
+    const iPrim=sem.findIndex(d=>d.noMes);
+    let iUlt=-1; sem.forEach((d,i)=>{ if(d.noMes) iUlt=i; });
+    return sem.map((d,i)=>({dia:d.dia, m: d.noMes?mes:(i<iPrim?am:prox)}));
+  };
+  const valorEm=(nome,x)=>{
+    if(x.m===mes) return valor(nome,x.dia);
+    if(x.m===am){ const dA=diasAnteriores(loja,mes,nome); return (dA&&dA[x.dia])||''; }
+    return '';
+  };
   semanasDoMes().forEach((sem,si)=>{
-    if(sem.some(d=>!d.noMes)){ puladas++; return; }
+    const dias=resolver(sem);
+    const temProx=dias.some(x=>x.m===prox);
+    const temPassado=dias.some(x=>x.m===am);
+    if(temProx || (temPassado && !temAnt)){ puladas++; return; }
     vs.forEach(v=>{
       let tot=0;
-      sem.forEach(d=>{ const f=faixaHoraria(valor(v.nome,d.dia)); if(f) tot+=f.liq; });
+      dias.forEach(x=>{ const f=faixaHoraria(valorEm(v.nome,x)); if(f) tot+=f.liq; });
       const hs=tot/60;
       if(hs<=REGRA.horasSemana) return;
-      const p=porPessoa[v.nome]=porPessoa[v.nome]||{graves:[],aten:[],maior:0};
+      const p=porPessoa[v.nome]=porPessoa[v.nome]||{graves:[],aten:[],maior:0,virada:false};
       p.maior=Math.max(p.maior,tot);
+      if(temPassado) p.virada=true;
       (hs>REGRA.horasSemanaGrave?p.graves:p.aten).push(si+1);
     });
   });
   Object.keys(porPessoa).forEach(n=>{
     const p=porPessoa[n];
+    const vir=p.virada?' A semana 1 conta com os dias de '+rotMes(am)+'.':'';
     if(p.graves.length)
       achados.push({nivel:'grave',regra:'semana',pessoa:n,
         texto:'Semana(s) '+p.graves.join(', ')+' acima de 48h — passa até do limite com horas extras. '+
-              'A maior fecha '+hhmm(p.maior)+'.',
+              'A maior fecha '+hhmm(p.maior)+'.'+vir,
         base:'CF art. 7º XIII + CLT art. 59'});
     if(p.aten.length)
       achados.push({nivel:'atencao',regra:'semana',pessoa:n,
-        texto:'Semana(s) '+p.aten.join(', ')+' acima das 44h. A maior fecha '+hhmm(p.maior)+'.',
+        texto:'Semana(s) '+p.aten.join(', ')+' acima das 44h. A maior fecha '+hhmm(p.maior)+'.'+vir,
         base:'CF art. 7º XIII — 44h semanais'});
   });
 
@@ -1904,6 +1991,8 @@ function conferirEscala(){
   }
 
   achados._puladas=puladas;
+  achados._semAnterior=!temAnt;
+  achados._mesAnterior=am;
   return achados;
 }
 
@@ -1913,8 +2002,16 @@ const travaEnvio=x=>x.regra!=='cobertura';
 function htmlApontamentos(r){
   const bloqueiam=r.filter(travaEnvio);
   const avisos=r.filter(x=>!travaEnvio(x));
-  const nota=r._puladas?('<p class="pat">'+r._puladas+' semana(s) que começam ou terminam fora deste mês '+
-    'ficaram de fora da conta das 44h — só dá para somar semana inteira.</p>'):'';
+  const fim=r._puladas?('<p class="pat">'+r._puladas+' semana(s) que avança(m) para o mês seguinte '+
+    'ficaram de fora da conta das 44h — esse mês ainda não existe para ser somado.</p>'):'';
+  const virada=r._semAnterior
+    ? '<p class="pat">Não consegui ler a escala de '+esc(rotMes(r._mesAnterior||''))+
+      ', então a virada do mês não foi conferida: a sequência de dias e a primeira semana '+
+      'começam do zero no dia 1. Abra o mês anterior uma vez e volte aqui.</p>'
+    : '<p class="pat">A conta puxa o fim de '+esc(rotMes(r._mesAnterior||''))+
+      ': dias seguidos, 44h da primeira semana e o descanso entre o último dia daquele mês '+
+      'e o dia 1 deste entram na conferência.</p>';
+  const nota=fim+virada;
   if(!r.length)
     return '<div class="confOk">✓ <b>Nenhuma regra quebrada.</b> Descanso semanal, domingos, 44h por semana, '+
            '8h por dia, 11h entre jornadas e cobertura — tudo dentro.</div>'+nota;
@@ -2498,7 +2595,9 @@ function trocarMes(delta){
 }
 async function abrirMes(){
   $('#listaDias').innerHTML='<div class="vazio" style="margin:12px">carregando…</div>';
-  carregouOk = await carregarEscala();
+  // o mês anterior vem junto: sem ele o conferidor não vê a virada
+  const par = await Promise.all([carregarEscala(), carregarAnterior()]);
+  carregouOk = par[0];
   sujo=false;
   renderEscala();
   travaSalvar();
