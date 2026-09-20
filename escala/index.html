@@ -1199,6 +1199,31 @@ function feriadosAtuais(){
 }
 
 function ativas(l){ return cadLoja(l).vendedoras.filter(v=>v.ativa!==false); }
+
+// Quem aparece na escala de UM MÊS. Não é a mesma coisa que "quem está
+// ativa hoje": inativar ou cadastrar alguém não pode mexer em mês que
+// já rodou.
+//   · mês já VALIDADO  → retrato: exatamente quem está lançado nele.
+//     Não ganha quem entrou depois nem perde quem saiu. Volta a aceitar
+//     gente nova quando o gestor reabre o mês.
+//   · mês aberto        → as ativas de hoje mais quem já tem dia lançado
+//     ali, para não sumir com ninguém no meio da edição.
+// Quem está na escala mas saiu do cadastro entra no fim, sempre.
+function daEscala(l,m){
+  l=l||loja; m=m||mes;
+  const e=ESC[l+'|'+m]||{};
+  const tem=n=>{ const d=e[n]; return !!(d && Object.keys(d).some(k=>d[k])); };
+  const cad=cadLoja(l).vendedoras;
+  const dentro=cad.filter(v=>tem(v.nome));
+  const validado=(STATUS[l+'|'+m]||{}).situacao==='VALIDADA';
+  const base=(validado && dentro.length) ? dentro
+           : cad.filter(v=>v.ativa!==false || tem(v.nome));
+  // nome repetido no cadastro (acontece) não pode virar duas linhas
+  const out=[], vistos={};
+  base.forEach(v=>{ const k=norm(v.nome); if(!vistos[k]){ vistos[k]=1; out.push(v); } });
+  Object.keys(e).forEach(n=>{ const k=norm(n); if(!vistos[k] && tem(n)){ vistos[k]=1; out.push({nome:n,ativa:false}); } });
+  return out;
+}
 function diasNoMes(m){ const [a,b]=m.split('-').map(Number); return new Date(a,b,0).getDate(); }
 function dataDe(m,d){ const [a,b]=m.split('-').map(Number); return new Date(a,b-1,d); }
 
@@ -1380,7 +1405,7 @@ function renderEscala(){
   $('#hdrSub').textContent=(loja||'—')+' · '+MESES[mm-1].toLowerCase()+' '+ano;
   renderSit();
 
-  const vs=ativas(loja);
+  const vs=daEscala(loja,mes);
   const alvo=$('#listaDias');
   if(!vs.length){
     alvo.innerHTML='<div class="vazio" style="margin:12px">'+(lendo
@@ -1430,7 +1455,7 @@ function renderEscala(){
 // navegador. No celular, "Imprimir" > "Salvar como PDF".
 // ═══════════════════════════════════════════════════
 function htmlImpressao(){
-  const vs=ativas(loja), [a,m]=mes.split('-').map(Number);
+  const vs=daEscala(loja,mes), [a,m]=mes.split('-').map(Number);
   const FER=feriadosDoMes(a,m,loja);
   const c=cadLoja(loja);
   const s=STATUS[chave()]||{};
@@ -1483,7 +1508,7 @@ function htmlImpressao(){
 // EXCEL — a mesma folha do PDF, em .xlsx de verdade
 // ═══════════════════════════════════════════════════
 function gerarExcel(){
-  const l=loja, vs=ativas(l);
+  const l=loja, vs=daEscala(l,mes);
   if(!vs.length){ toast('Não há escala para exportar'); return; }
   const [a,mn]=mes.split('-').map(Number);
   const FER=feriadosDoMes(a,mn,l);
@@ -1751,7 +1776,7 @@ function listaDias(ds,rot){
 }
 
 function conferirEscala(){
-  const vs=ativas(loja), achados=[];
+  const vs=daEscala(loja,mes), achados=[];
   if(!vs.length) return achados;
   const nd=diasNoMes(mes), FER=feriadosAtuais();
   const add=(nivel,regra,pessoa,texto,base)=>achados.push({nivel,regra,pessoa,texto,base});
@@ -2106,7 +2131,7 @@ async function abrirHistorico(){
       '<span class="vtag '+sitDo()+'">'+ROT_SIT[sitDo()]+'</span>'+
       '<em>valendo agora</em></div>'+
       (motivoAtual()?'<div class="vmot">'+esc(motivoAtual())+'</div>':'')+
-      '<div class="vpes">'+ativas(loja).length+' pessoas na escala</div></div>';
+      '<div class="vpes">'+daEscala(loja,mes).length+' pessoas na escala</div></div>';
   lista.slice().reverse().forEach(v=>{
     h+='<div class="vit"><div class="vtop"><b>v'+v.versao+'</b>'+
        '<span class="vtag '+esc(v.situacao)+'">'+esc(ROT_SIT[v.situacao]||v.situacao)+'</span>'+
@@ -2202,7 +2227,7 @@ const EXPL_SIT={
 // O único número que muda uma decisão é este: dia sem ninguém na loja.
 // Só aparece quando existe — o resto era enfeite e saiu.
 function avisoCobertura(){
-  const vs=ativas(loja), nd=diasNoMes(mes);
+  const vs=daEscala(loja,mes), nd=diasNoMes(mes);
   if(!vs.length) return '';
   let vazios=0;
   for(let d=1;d<=nd;d++){
@@ -2283,7 +2308,7 @@ function renderSit(){
 }
 
 function atualizar(){
-  const vs=ativas(loja), nd=diasNoMes(mes);
+  const vs=daEscala(loja,mes), nd=diasNoMes(mes);
   for(let d=1;d<=nd;d++){
     let n=0;
     vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d))) n++; });
@@ -2309,7 +2334,7 @@ function renderLegenda(){
 // TELA: RESUMO
 // ═══════════════════════════════════════════════════
 function renderResumo(){
-  const vs=ativas(loja), nd=diasNoMes(mes);
+  const vs=daEscala(loja,mes), nd=diasNoMes(mes);
   if(!vs.length){ $('#tbResumo').innerHTML=''; $('#tbCob').innerHTML=''; return; }
   let h='<thead><tr><th>Vendedora</th><th>Dias</th><th>Dom.</th><th>Total</th><th>Folgas</th></tr></thead><tbody>';
   let A=0,B=0,C=0,D=0;
@@ -2419,14 +2444,14 @@ function mostrarTela(t){
 
 function linhasParaSalvar(){
   const m=ESC[chave()]||{};
-  return ativas(loja).map(v=>({vendedora:v.nome,dias:m[v.nome]||{}}));
+  return daEscala(loja,mes).map(v=>({vendedora:v.nome,dias:m[v.nome]||{}}));
 }
 
 async function salvar(situacao,porQuem){
   if(!carregouOk){ toast('Sem conexão com a planilha — recarregue antes de salvar'); return; }
   if(!configOk){ toast('Cadastro não carregou — recarregue antes de gravar'); return; }
   // trava dura: lista de vendedoras vazia NUNCA grava, apagaria o mês inteiro
-  if(!ativas(loja).length){ toast('Sem vendedoras carregadas — não vou gravar por cima da escala'); return; }
+  if(!daEscala(loja,mes).length){ toast('Sem vendedoras carregadas — não vou gravar por cima da escala'); return; }
   if(bloqueada()){ toast('Escala validada — peça ao gestor para reabrir'); return; }
   const quem = porQuem || (admin?'gestor':'gerente');
   const bt=$('#btSalvar'); bt.disabled=true; bt.textContent='Salvando…';
@@ -2468,7 +2493,7 @@ function travaSalvar(){
     if(av) av.hidden=true;
     return;
   }
-  const semRoteiro = !configOk || !ativas(loja).length;
+  const semRoteiro = !configOk || !daEscala(loja,mes).length;
   if(!carregouOk || semRoteiro){
     bs.disabled=true; bs.textContent='Sem conexão';
     be.disabled=true; be.style.opacity=.45; be.hidden=false;
@@ -2611,7 +2636,7 @@ async function init(){
     const rep=e.target.closest('[data-rep]');
     if(rep){
       const para=+rep.dataset.rep, de=+rep.dataset.de;
-      ativas(loja).forEach(v=>{
+      daEscala(loja,mes).forEach(v=>{
         const val=valor(v.nome,de);
         setValor(v.nome,para,val);
         const s=document.querySelector('select[data-v="'+CSS.escape(v.nome)+'"][data-d="'+para+'"]');
@@ -2636,7 +2661,7 @@ async function init(){
       const semanas=semanasDoMes();
       const ori=semanas[si-2], dst=semanas[si-1];
       if(!ori||!dst) return;
-      ativas(loja).forEach(v=>{
+      daEscala(loja,mes).forEach(v=>{
         for(let j=0;j<7;j++){
           if(!dst[j].noMes) continue;
           const de = ori[j].noMes ? valor(v.nome,ori[j].dia) : '';
