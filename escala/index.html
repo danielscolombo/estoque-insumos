@@ -273,11 +273,13 @@ table.gr select.g{width:100%;border:1px solid transparent;background:transparent
   appearance:none;-webkit-appearance:none;cursor:pointer;}
 table.gr select.g:disabled{opacity:.3;cursor:default;}
 table.gr td.cel:not(.fora) select.g:disabled{opacity:1;cursor:default;}
-table.gr select.g.ABERTURA     {background:var(--t-ab);color:var(--t-ab-i);}
-table.gr select.g.INTERMEDIARIO{background:var(--t-in);color:var(--t-in-i);}
-table.gr select.g.FECHAMENTO   {background:var(--t-fe);color:var(--t-fe-i);}
-table.gr select.g.DOMINGO      {background:var(--t-do);color:var(--t-do-i);}
-table.gr select.g.FOLGA        {background:var(--t-fo);color:var(--t-fo-i);font-family:inherit;
+/* Só a folga tem cor. Quem está trabalhando fica sem fundo — o que
+   salta aos olhos na grade é quem NÃO está na loja. */
+table.gr select.g.ABERTURA,
+table.gr select.g.INTERMEDIARIO,
+table.gr select.g.FECHAMENTO,
+table.gr select.g.DOMINGO      {background:transparent;color:var(--ink);}
+table.gr select.g.FOLGA        {background:var(--t-ab);color:var(--t-ab-i);font-family:inherit;
   font-weight:600;letter-spacing:.8px;font-size:.68rem;}
 table.gr select.g.AUSENCIA     {background:var(--t-au);color:var(--t-au-i);font-family:inherit;
   font-weight:500;letter-spacing:.4px;font-size:.68rem;}
@@ -301,19 +303,24 @@ table.gr.sig td.nm{font-size:.72rem;padding:0 8px;}
 table.gr.sig .sg{display:block;border-radius:7px;padding:10px 0;text-align:center;
   font-family:'Archivo',sans-serif;font-size:.8rem;font-weight:600;letter-spacing:.5px;
   color:var(--faint);white-space:nowrap;overflow:hidden;}
-table.gr.sig .sg.ABERTURA     {background:var(--t-ab);color:var(--t-ab-i);}
-table.gr.sig .sg.INTERMEDIARIO{background:var(--t-in);color:var(--t-in-i);}
-table.gr.sig .sg.FECHAMENTO   {background:var(--t-fe);color:var(--t-fe-i);}
-table.gr.sig .sg.DOMINGO      {background:var(--t-do);color:var(--t-do-i);}
-table.gr.sig .sg.FOLGA        {background:var(--t-fo);color:var(--t-fo-i);}
+table.gr.sig .sg.ABERTURA,
+table.gr.sig .sg.INTERMEDIARIO,
+table.gr.sig .sg.FECHAMENTO,
+table.gr.sig .sg.DOMINGO      {background:transparent;color:var(--ink);}
+table.gr.sig .sg.FOLGA        {background:var(--t-ab);color:var(--t-ab-i);}
 table.gr.sig .sg.AUSENCIA     {background:var(--t-au);color:var(--t-au-i);}
 @media (max-width:400px){
   table.gr.sig td.nm{font-size:.66rem;padding:0 5px;}
   table.gr.sig .sg{font-size:.74rem;padding:9px 0;letter-spacing:0;}
 }
-/* a legenda do Resumo traz a sigla na frente do horário */
+/* a legenda do Resumo traz a sigla na frente do horário, com a mesma
+   cor da célula: só a folga é amarela, quem trabalha fica sem cor */
 .legend .lg u{display:inline-block;min-width:1.5em;margin-right:6px;text-decoration:none;font-weight:700;
   text-align:center;}
+.legend .lg.ABERTURA,.legend .lg.INTERMEDIARIO,
+.legend .lg.FECHAMENTO,.legend .lg.DOMINGO{background:var(--surface);color:var(--ink);border-color:var(--line-2);}
+.legend .lg.FOLGA   {background:var(--t-ab);color:var(--t-ab-i);border-color:var(--t-ab-b);}
+.legend .lg.AUSENCIA{background:var(--t-au);color:var(--t-au-i);border-color:var(--t-au-b);}
 
 table.gr tr.cob td{background:var(--surface-2);font-family:'IBM Plex Mono',ui-monospace,monospace;
   font-variant-numeric:tabular-nums;font-size:.82rem;font-weight:500;text-align:center;padding:7px 2px;
@@ -401,11 +408,11 @@ table.gr tr:last-child td{border-bottom:0;}
   color:var(--muted);border-radius:var(--r);padding:9px 6px;font-size:.78rem;
   font-family:'IBM Plex Mono',ui-monospace,monospace;font-variant-numeric:tabular-nums;
   text-align:center;text-align-last:center;appearance:none;-webkit-appearance:none;cursor:pointer;}
-.ln select.ABERTURA     {background:var(--t-ab);color:var(--t-ab-i);border-color:var(--t-ab-b);}
-.ln select.INTERMEDIARIO{background:var(--t-in);color:var(--t-in-i);border-color:var(--t-in-b);}
-.ln select.FECHAMENTO   {background:var(--t-fe);color:var(--t-fe-i);border-color:var(--t-fe-b);}
-.ln select.DOMINGO      {background:var(--t-do);color:var(--t-do-i);border-color:var(--t-do-b);}
-.ln select.FOLGA        {background:var(--t-fo);color:var(--t-fo-i);border-color:var(--t-fo-b);
+.ln select.ABERTURA,
+.ln select.INTERMEDIARIO,
+.ln select.FECHAMENTO,
+.ln select.DOMINGO      {background:var(--surface);color:var(--ink);border-color:var(--line-2);}
+.ln select.FOLGA        {background:var(--t-ab);color:var(--t-ab-i);border-color:var(--t-ab-b);
   font-family:inherit;font-weight:600;letter-spacing:.8px;}
 .ln select.AUSENCIA     {background:var(--t-au);color:var(--t-au-i);border-color:var(--t-au-b);
   font-family:inherit;font-weight:500;}
@@ -659,11 +666,11 @@ table.pr-gr th.fora,table.pr-gr td.fora{background:#F5F1F3;color:#B4A9B0;}
 table.pr-gr th.fora b{color:#B4A9B0;}
 table.pr-gr th.nm,table.pr-gr td.nm{width:16%;text-align:left;padding-left:5px;font-weight:500;}
 table.pr-gr td.nm{background:#F5F1F3;font-size:6.4pt;color:#241A21;}
-table.pr-gr td.ABERTURA     {background:#FBF2E1;color:#7A5518;}
-table.pr-gr td.INTERMEDIARIO{background:#EFEAF6;color:#4C3F70;}
-table.pr-gr td.FECHAMENTO   {background:#E7EFF6;color:#1B5480;}
-table.pr-gr td.DOMINGO      {background:#F7ECF1;color:#7A2E4A;}
-table.pr-gr td.FOLGA        {background:#EBE4E8;color:#4E434B;font-weight:600;letter-spacing:.4pt;}
+table.pr-gr td.ABERTURA,
+table.pr-gr td.INTERMEDIARIO,
+table.pr-gr td.FECHAMENTO,
+table.pr-gr td.DOMINGO      {background:#FFFFFF;color:#241A21;}
+table.pr-gr td.FOLGA        {background:#FBF2E1;color:#7A5518;font-weight:600;letter-spacing:.4pt;}
 table.pr-gr td.AUSENCIA     {background:#FBEEEC;color:#A32B25;font-weight:500;}
 table.pr-gr td.fer{box-shadow:inset 0 0 0 .7pt #A32B25;}
 table.pr-gr tr.cob td{background:#F5F1F3;font-family:'IBM Plex Mono',monospace;
@@ -2326,9 +2333,8 @@ function atualizar(){
 function renderLegenda(){
   if(VISTA!=='resumo'){ $('#legenda').innerHTML=''; return; }
   const c=cadLoja(loja);
-  const v={ABERTURA:'ab',INTERMEDIARIO:'in',FECHAMENTO:'fe',DOMINGO:'do',FOLGA:'fo',AUSENCIA:'au'};
-  const chip=(sg,txt,t)=>'<span class="lg" style="background:var(--t-'+v[t]+');color:var(--t-'+v[t]+
-    '-i);border-color:var(--t-'+v[t]+'-b)"><u>'+esc(sg)+'</u>'+esc(txt)+'</span>';
+  // as cores do dicionário são as mesmas das células — CSS, não estilo aqui
+  const chip=(sg,txt,cl)=>'<span class="lg '+cl+'"><u>'+esc(sg)+'</u>'+esc(txt)+'</span>';
   let h=c.turnos.map(t=>chip(norm(t.sigla), rot(t), TIPOS.indexOf(norm(t.tipo))>=0?norm(t.tipo):'INTERMEDIARIO')).join('')+
         c.ausencias.map(a=>chip(norm(a.sigla), a.rotulo, norm(a.tipo)==='FOLGA'?'FOLGA':'AUSENCIA')).join('');
   $('#legenda').innerHTML=h;
