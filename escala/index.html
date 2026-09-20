@@ -2314,7 +2314,12 @@ function renderSit(){
   const bv=$('#btValidar');
   if(bv) bv.onclick=async()=>{
     if(sujo){ toast('Salve as alterações antes de validar'); return; }
-    await mudarSit('VALIDADA','gestor','Escala validada e fechada');
+    // Validar congela o retrato: grava a escala como está na tela e só
+    // então fecha o mês. Sem isso, quem saiu da grade (inativada no
+    // cadastro) continuava na planilha e voltava ao validar.
+    await salvar('VALIDADA','gestor');
+    toast('Escala validada e fechada');
+    carregarStatus().then(()=>{ renderSit(); });
   };
   const br=$('#btReabrir');
   if(br) br.onclick=async()=>{
