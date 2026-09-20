@@ -243,12 +243,15 @@ body{
 .tbw{overflow-x:auto;-webkit-overflow-scrolling:touch;}
 table.gr{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;}
 table.gr th,table.gr td{border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:0;}
-table.gr th{background:var(--surface);color:var(--muted);font-size:.6rem;font-weight:600;
+/* A faixa das datas leva o tom da casa — é o que separa o cabeçalho do
+   corpo agora que os turnos ficaram sem cor. Domingo e feriado
+   continuam se distinguindo pela cor do texto. */
+table.gr th{background:var(--plum-soft);color:var(--plum);font-size:.6rem;font-weight:600;
   letter-spacing:1px;text-transform:uppercase;padding:9px 4px 8px;text-align:center;white-space:nowrap;
-  border-bottom:1px solid var(--line-2);}
+  border-bottom:1px solid var(--plum);}
 table.gr th .dd{display:block;font-family:'IBM Plex Mono',ui-monospace,monospace;
-  font-variant-numeric:tabular-nums;font-size:.95rem;font-weight:500;letter-spacing:-.3px;
-  color:var(--ink);margin-top:3px;}
+  font-variant-numeric:tabular-nums;font-size:.95rem;font-weight:600;letter-spacing:-.3px;
+  color:var(--plum);margin-top:3px;}
 table.gr th.dom{background:var(--t-do);color:var(--t-do-i);}
 table.gr th.dom .dd{color:var(--t-do-i);}
 table.gr th.fer{background:var(--fer-bg);color:var(--fer);}
@@ -259,7 +262,7 @@ table.gr th.fora{background:var(--surface-2);color:var(--faint);}
 table.gr th.fora .dd{color:var(--faint);}
 
 table.gr th.nm,table.gr td.nm{position:sticky;left:0;z-index:3;min-width:118px;max-width:118px;}
-table.gr th.nm{text-align:left;padding-left:16px;background:var(--surface);}
+table.gr th.nm{text-align:left;padding-left:16px;background:var(--plum-soft);}
 table.gr td.nm{background:var(--surface-2);font-size:.74rem;font-weight:500;padding:0 12px;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink);
   border-right:1px solid var(--line-2);}
@@ -382,13 +385,13 @@ table.gr tr:last-child td{border-bottom:0;}
 .dia.fer{border-color:var(--t-au-b);}
 .dia.hoje{border-color:var(--plum);box-shadow:0 0 0 2px var(--plum-soft);}
 .dia-h{display:flex;align-items:center;gap:10px;padding:11px 18px;min-height:48px;
-  background:var(--surface-2);border-bottom:1px solid var(--line);}
+  background:var(--plum-soft);border-bottom:1px solid var(--line);}
 .dia.dom .dia-h{background:var(--t-do);}
 .dia.fer .dia-h{background:var(--fer-bg);}
-.dia-h .dow{font-size:.66rem;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--muted);}
+.dia-h .dow{font-size:.66rem;font-weight:600;letter-spacing:1.4px;text-transform:uppercase;color:var(--plum);}
 .dia.dom .dia-h .dow{color:var(--t-do-i);}
 .dia.fer .dia-h .dow{color:var(--fer);}
-.dia-h .num{font-size:1.15rem;font-weight:500;line-height:1;margin-right:auto;letter-spacing:-.5px;color:var(--ink);}
+.dia-h .num{font-size:1.15rem;font-weight:600;line-height:1;margin-right:auto;letter-spacing:-.5px;color:var(--plum);}
 .dia.dom .dia-h .num{color:var(--t-do-i);}
 .dia.fer .dia-h .num{color:var(--fer);}
 .dia-h .ferb{font-size:.58rem;font-weight:600;letter-spacing:.9px;text-transform:uppercase;
@@ -652,7 +655,7 @@ table.t tr.tot td{background:var(--surface-2);font-weight:600;color:var(--ink);}
 table.pr-gr{width:100%;border-collapse:collapse;table-layout:fixed;}
 table.pr-gr th,table.pr-gr td{border:.4pt solid #D8CDD3;padding:2.5px 1px;text-align:center;
   font-size:6.8pt;font-weight:400;word-break:break-word;line-height:1.2;}
-table.pr-gr th{background:#FFFFFF;color:#867A82;font-size:5.6pt;font-weight:600;letter-spacing:.7pt;
+table.pr-gr th{background:#F3EBEF;color:#6E2440;font-size:5.6pt;font-weight:600;letter-spacing:.7pt;
   text-transform:uppercase;border-bottom:.7pt solid #867A82;}
 table.pr-gr th b{display:block;font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums;
   font-size:8.5pt;font-weight:500;color:#241A21;letter-spacing:-.2pt;margin-top:1px;}
@@ -1444,10 +1447,14 @@ function htmlImpressao(){
   const c=cadLoja(loja);
   const s=STATUS[chave()]||{};
 
+  const vA=versaoAtual();
   let h='<div class="pr-cab">'+
         '<div><div class="pr-t">ESCALA DE TRABALHO</div>'+
-        '<div class="pr-s">'+esc(loja)+' &nbsp;·&nbsp; '+MESES[m-1]+' '+a+'</div></div>'+
-        '<div class="pr-sel">VALIDADA<small>'+esc(fmtData(s.atualizado||''))+'</small></div></div>';
+        '<div class="pr-s">'+esc(loja)+' &nbsp;·&nbsp; '+MESES[m-1]+' '+a+
+          ' &nbsp;·&nbsp; <b>versão '+vA+'</b></div></div>'+
+        '<div class="pr-sel">VALIDADA<small>v'+vA+
+          (s.atualizado?' &nbsp;·&nbsp; '+esc(fmtData(s.atualizado)):'')+'</small>'+
+          (s.por?'<small>por '+esc(s.por)+'</small>':'')+'</div></div>';
 
   h+='<div class="pr-wrap">';
   semanasDoMes().forEach((sem,si)=>{
@@ -1499,8 +1506,8 @@ function gerarExcel(){
 
   let ln=F.add([{v:'ESCALA DE TRABALHO',s:'titulo'}],26);
   F.merge(ln,0,5);
-  ln=F.add([{v:l+'  ·  '+MESES[mn-1]+' '+a,s:'sub'},null,null,null,null,null,
-            {v:sitDo()==='VALIDADA'?'VALIDADA':sitDo(),s:'validada'}],17);
+  ln=F.add([{v:l+'  ·  '+MESES[mn-1]+' '+a+'  ·  versão '+versaoAtual(),s:'sub'},null,null,null,null,null,
+            {v:(sitDo()==='VALIDADA'?'VALIDADA':sitDo())+'  v'+versaoAtual(),s:'validada'}],17);
   F.merge(ln,0,3);
   F.add([]);
 
