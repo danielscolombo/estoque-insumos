@@ -1223,12 +1223,22 @@ function daEscala(l,m){
   const cad=cadLoja(l).vendedoras;
   const dentro=cad.filter(v=>tem(v.nome));
   const validado=(STATUS[l+'|'+m]||{}).situacao==='VALIDADA';
-  const base=(validado && dentro.length) ? dentro
-           : cad.filter(v=>v.ativa!==false || tem(v.nome));
+  // Mês validado é retrato: vale quem está nele, inativada ou não, para
+  // que inativar alguém hoje não mexa no que já foi fechado e pago.
+  // Mês aberto (rascunho, enviada, versão nova) segue o cadastro: quem
+  // foi inativada sai da grade e some do mês ao salvar.
+  const base=(validado && dentro.length) ? dentro : cad.filter(v=>v.ativa!==false);
   // nome repetido no cadastro (acontece) não pode virar duas linhas
   const out=[], vistos={};
   base.forEach(v=>{ const k=norm(v.nome); if(!vistos[k]){ vistos[k]=1; out.push(v); } });
-  Object.keys(e).forEach(n=>{ const k=norm(n); if(!vistos[k] && tem(n)){ vistos[k]=1; out.push({nome:n,ativa:false}); } });
+  // quem está na escala mas não no cadastro (veio do PDF, foi digitada
+  // direto) não pode sumir — no mês aberto, só essa gente é resgatada.
+  const noCad={}; cad.forEach(v=>{ noCad[norm(v.nome)]=1; });
+  Object.keys(e).forEach(n=>{ const k=norm(n);
+    if(vistos[k] || !tem(n)) return;
+    if(!validado && noCad[k]) return;
+    vistos[k]=1; out.push({nome:n,ativa:false});
+  });
   return out;
 }
 function diasNoMes(m){ const [a,b]=m.split('-').map(Number); return new Date(a,b,0).getDate(); }
