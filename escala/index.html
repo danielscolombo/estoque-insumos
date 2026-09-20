@@ -579,6 +579,9 @@ table.t tr.tot td{background:var(--surface-2);font-weight:600;color:var(--ink);}
   border:1px solid var(--alerta-line);}
 .cfn.ruim{background:var(--fer-bg);color:var(--fer);border-color:var(--fer);}
 .cfn.ok{background:var(--vr-bg);color:var(--vr);border-color:var(--vr);}
+/* escala com regra quebrada: o botão de conferir avisa por si */
+.bt.alerta{border-color:var(--fer);color:var(--fer);}
+.bt.alerta:hover{background:var(--fer-bg);}
 .aviso-s .ruim{color:var(--fer);}
 
 .confOk{padding:13px 15px;border-radius:11px;background:var(--vr-bg);color:var(--vr);
@@ -2216,12 +2219,14 @@ function renderSit(){
   const sit=sitDo();
 
   const v=versaoAtual();
-  const cf=(sit!=='VALIDADA'||admin) ? resumoConf() : null;
+  // A conferência é de todo mundo, não só do gestor: é ela que diz à
+  // gerente por que a escala não vai para validação.
+  const cf=resumoConf();
 
   let dir='';
-  if(cf) dir+='<button class="bt bt-ghost" id="btConf">Conferir escala'+
-              (cf.bloq?' <em class="cfn ruim">'+cf.bloq+'</em>':
-               cf.aviso?' <em class="cfn">'+cf.aviso+'</em>':' <em class="cfn ok">✓</em>')+'</button>';
+  dir+='<button class="bt bt-ghost'+(cf.bloq?' alerta':'')+'" id="btConf">Conferir escala'+
+       (cf.bloq?' <em class="cfn ruim">'+cf.bloq+'</em>':
+        cf.aviso?' <em class="cfn">'+cf.aviso+'</em>':' <em class="cfn ok">✓</em>')+'</button>';
   if(sit==='VALIDADA')           dir+='<button class="bt bt-ghost" id="btPDF">Gerar PDF</button>'+
                                       '<button class="bt bt-ghost" id="btXLS">Gerar Excel</button>';
   // a gerente não edita um mês validado — ela pede uma versão nova
