@@ -859,7 +859,7 @@ function montarEstilos(){
     {sz:9,cor:'FF4C3F70'},                               // 7 intermediário
     {sz:9,cor:'FF1B5480'},                               // 8 fechamento
     {sz:9,cor:'FF7A2E4A'},                               // 9 domingo
-    {b:1,sz:8.5,cor:'FF4E434B'},                         // 10 folga
+    {b:1,sz:8.5,cor:'FF7A5518'},                         // 10 folga
     {sz:8.5,cor:'FFA32B25'},                             // 11 ausência
     {b:1,sz:10,cor:'FF241A21'},                          // 12 contagem
     {b:1,sz:7.5,cor:'FF867A82'},                         // 13 rótulo do rodapé
@@ -867,18 +867,21 @@ function montarEstilos(){
     {b:1,sz:9,cor:'FF7A2E4A'},                           // 15 cabeçalho domingo
     {b:1,sz:9,cor:'FFA32B25'},                           // 16 cabeçalho feriado
     {b:1,sz:9,cor:'FFB4A9B0'},                           // 17 cabeçalho fora do mês
-    {b:1,sz:9,cor:'FF186B51'}                            // 18 validada
+    {b:1,sz:9,cor:'FF186B51'},                           // 18 validada
+    {sz:9,cor:'FF241A21'},                               // 19 turno (sem cor)
+    {b:1,sz:9,cor:'FF6E2440'}                            // 20 cabeçalho do dia
   ];
   const fonteXml=fontes.map(f=>'<font>'+(f.b?'<b/>':'')+
     '<sz val="'+(f.sz||10)+'"/><color rgb="'+(f.cor||'FF241A21')+'"/>'+
     '<name val="Calibri"/></font>').join('');
 
-  const cores=['FBF2E1','EFEAF6','E7EFF6','F7ECF1','EBE4E8','FBEEEC','F5F1F3','FFFFFF'];
+  const cores=['FBF2E1','EFEAF6','E7EFF6','F7ECF1','EBE4E8','FBEEEC','F5F1F3','FFFFFF',
+               'F3EBEF','F0ECEE'];
   const fillXml='<fill><patternFill patternType="none"/></fill>'+
                 '<fill><patternFill patternType="gray125"/></fill>'+
     cores.map(c=>'<fill><patternFill patternType="solid"><fgColor rgb="FF'+c+'"/>'+
       '<bgColor indexed="64"/></patternFill></fill>').join('');
-  const F={ab:2,in:3,fe:4,do:5,fo:6,au:7,cinza:8,branco:9};
+  const F={ab:2,in:3,fe:4,do:5,fo:6,au:7,cinza:8,branco:9,faixa:10,ferCol:11};
 
   const bordaFina='<left style="thin"><color rgb="FFD8CDD3"/></left>'+
                   '<right style="thin"><color rgb="FFD8CDD3"/></right>'+
@@ -900,21 +903,25 @@ function montarEstilos(){
     sub:       [2,0,B.nenhuma,'<alignment vertical="center"/>'],
     validada:  [18,0,B.nenhuma,'<alignment horizontal="right" vertical="center"/>'],
     semana:    [3,0,B.nenhuma,'<alignment vertical="center"/>'],
-    cab:       [4,F.branco,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
+    cab:       [20,F.faixa,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
     cabDom:    [15,F.do,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
-    cabFer:    [16,F.au,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
+    cabFer:    [16,F.ferCol,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
     cabFora:   [17,F.cinza,B.cab,'<alignment horizontal="center" vertical="center" wrapText="1"/>'],
-    cabNome:   [4,F.branco,B.cab,'<alignment horizontal="left" vertical="center"/>'],
+    cabNome:   [20,F.faixa,B.cab,'<alignment horizontal="left" vertical="center"/>'],
     nome:      [5,F.cinza,B.fina,'<alignment horizontal="left" vertical="center"/>'],
     vazio:     [0,F.branco,B.fina,''],
+    vazioFer:  [0,F.ferCol,B.fina,''],
     fora:      [0,F.cinza,B.fina,''],
-    ABERTURA:  [6,F.ab,B.fina,'<alignment horizontal="center" vertical="center"/>'],
-    INTERMEDIARIO:[7,F.in,B.fina,'<alignment horizontal="center" vertical="center"/>'],
-    FECHAMENTO:[8,F.fe,B.fina,'<alignment horizontal="center" vertical="center"/>'],
-    DOMINGO:   [9,F.do,B.fina,'<alignment horizontal="center" vertical="center"/>'],
-    FOLGA:     [10,F.fo,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    // quem trabalha não pinta a célula; a folga é que ganha cor, e no
+    // feriado o fundo cinza aparece por baixo — igual à tela e ao PDF
+    turno:     [19,F.branco,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    turnoFer:  [19,F.ferCol,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    FOLGA:     [10,F.ab,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    FOLGAFer:  [10,F.ab,B.fina,'<alignment horizontal="center" vertical="center"/>'],
     AUSENCIA:  [11,F.au,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    AUSENCIAFer:[11,F.au,B.fina,'<alignment horizontal="center" vertical="center"/>'],
     conta:     [12,F.cinza,B.fina,'<alignment horizontal="center" vertical="center"/>'],
+    contaFer:  [12,F.ferCol,B.fina,'<alignment horizontal="center" vertical="center"/>'],
     contaNome: [3,F.cinza,B.fina,'<alignment horizontal="right" vertical="center"/>'],
     rodLabel:  [13,0,B.nenhuma,'<alignment vertical="center"/>'],
     rodTexto:  [14,0,B.nenhuma,'<alignment vertical="center"/>']
@@ -1542,15 +1549,17 @@ function gerarExcel(){
       const li=[{v:v.nome,s:'nome'}];
       sem.forEach(d=>{
         if(!d.noMes){ li.push({v:'',s:'fora'}); return; }
+        const fr=FER[d.dia]?'Fer':'';          // coluna de feriado: fundo cinza
         const val=valor(v.nome,d.dia);
-        if(!val){ li.push({v:'',s:'vazio'}); return; }
+        if(!val){ li.push({v:'',s:'vazio'+fr}); return; }
         const cl=classeDe(l,val);
         let txt=val;
         if(cl==='FOLGA'||cl==='AUSENCIA'){
           txt=curtoRot(val);
           if(txt!==String(val).trim()) abrev[txt]=String(val).trim();
+          li.push({v:txt,s:cl+fr}); return;
         }
-        li.push({v:txt,s:(cl||'vazio')});
+        li.push({v:txt,s:'turno'+fr});
       });
       F.add(li,19);
     });
@@ -1559,7 +1568,7 @@ function gerarExcel(){
     sem.forEach(d=>{
       if(!d.noMes){ cont.push({v:'',s:'fora'}); return; }
       let q=0; vs.forEach(v=>{ if(trabalha(l,valor(v.nome,d.dia))) q++; });
-      cont.push({n:q,s:'conta'});
+      cont.push({n:q,s:FER[d.dia]?'contaFer':'conta'});
     });
     F.add(cont,19);
     F.add([]);
