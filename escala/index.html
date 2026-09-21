@@ -1576,57 +1576,72 @@ function gerarExcel(){
   const F=new Folha();
 
   let ln=F.add([{v:'ESCALA DE TRABALHO',s:'titulo'}],26);
-  F.merge(ln,0,5);
+  F.merge(ln,0,6);
   ln=F.add([{v:l+'  ·  '+MESES[mn-1]+' '+a+'  ·  versão '+versaoAtual(),s:'sub'},null,null,null,null,null,
             {v:(sitDo()==='VALIDADA'?'VALIDADA':sitDo())+'  v'+versaoAtual(),s:'validada'}],17);
   F.merge(ln,0,3);
   F.add([]);
 
+  // ── O DESENHO É O DA PLANILHA DA REDE
+  // Lá cada dia ocupa DUAS colunas mescladas, sempre na coluna do dia
+  // da semana: B=DOM, D=SEG, F=TER, H=QUA, J=QUI, L=SEX, N=SÁB. Semana
+  // que começa no meio do mês deixa as primeiras colunas em branco, em
+  // vez de encostar tudo à esquerda. É isso que faz o copiar e colar
+  // encaixar: mesmo número de colunas, mescladas do mesmo jeito.
+  const COL=i=>1+2*i;                 // dia da semana -> coluna (0=A)
+
   semanasDoMes().forEach((sem,si)=>{
     const noMes=sem.filter(d=>d.noMes);
     ln=F.add([{v:'SEMANA '+(si+1)+'  ·  '+noMes[0].dia+' a '+noMes[noMes.length-1].dia,s:'semana'}],16);
-    F.merge(ln,0,3);
+    F.merge(ln,0,6);
 
     const temFer=sem.some(d=>d.noMes&&FER[d.dia]);
-    const cab=[{v:'NOME',s:'cabNome'}];
-    sem.forEach(d=>{
+    // cabeçalho igual ao da planilha: sigla numa coluna, dia na de baixo
+    const cab=[{v:'NOMES',s:'cabNome'}];
+    sem.forEach((d,i)=>{
       const f=d.noMes?FER[d.dia]:null;
       const st=!d.noMes?'cabFora':(f?'cabFer':(d.dow===0?'cabDom':'cab'));
-      cab.push({v:DOW[d.dow]+'\n'+(d.noMes?pad(d.dia):'–')+(f?'\nFERIADO':''),s:st});
+      cab[COL(i)]  ={v:DOW[d.dow]+(f?' FERIADO':''),s:st};
+      cab[COL(i)+1]={v:d.noMes?pad(d.dia):'',s:st};
     });
-    F.add(cab,temFer?42:32);
+    F.add(cab,temFer?26:22);
 
     vs.forEach(v=>{
       const li=[{v:v.nome,s:'nome'}];
-      sem.forEach(d=>{
-        if(!d.noMes){ li.push({v:'',s:'fora'}); return; }
+      sem.forEach((d,i)=>{
+        const c=COL(i);
+        if(!d.noMes){ li[c]={v:'',s:'fora'}; li[c+1]={v:'',s:'fora'}; return; }
         const fr=FER[d.dia]?'Fer':'';          // coluna de feriado: fundo cinza
         const val=valor(v.nome,d.dia);
-        if(!val){ li.push({v:'',s:'vazio'+fr}); return; }
+        if(!val){ li[c]={v:'',s:'vazio'+fr}; li[c+1]={v:'',s:'vazio'+fr}; return; }
         const cl=classeDe(l,val);
         let txt=val;
         if(cl==='FOLGA'||cl==='AUSENCIA'){
           txt=curtoRot(val);
           if(txt!==String(val).trim()) abrev[txt]=String(val).trim();
-          li.push({v:txt,s:cl+fr}); return;
+          li[c]={v:txt,s:cl+fr}; li[c+1]={v:'',s:cl+fr}; return;
         }
-        li.push({v:txt,s:'turno'+fr});
+        li[c]={v:txt,s:'turno'+fr}; li[c+1]={v:'',s:'turno'+fr};
       });
-      F.add(li,19);
+      const lv=F.add(li,19);
+      sem.forEach((d,i)=>F.merge(lv,COL(i),COL(i)+1));
     });
 
     const cont=[{v:'NA LOJA',s:'contaNome'}];
-    sem.forEach(d=>{
-      if(!d.noMes){ cont.push({v:'',s:'fora'}); return; }
+    sem.forEach((d,i)=>{
+      const c=COL(i);
+      if(!d.noMes){ cont[c]={v:'',s:'fora'}; cont[c+1]={v:'',s:'fora'}; return; }
       let q=0; vs.forEach(v=>{ if(trabalha(l,valor(v.nome,d.dia))) q++; });
-      cont.push({n:q,s:FER[d.dia]?'contaFer':'conta'});
+      const st=FER[d.dia]?'contaFer':'conta';
+      cont[c]={n:q,s:st}; cont[c+1]={v:'',s:st};
     });
-    F.add(cont,19);
+    const lc=F.add(cont,19);
+    sem.forEach((d,i)=>F.merge(lc,COL(i),COL(i)+1));
     F.add([]);
   });
 
   baixarXlsx('Escala '+l+' '+mes+'.xlsx', MESES[mn-1].slice(0,3)+' '+a, F,
-             [22,13.5,13.5,13.5,13.5,13.5,13.5,13.5]);
+             [22,7,7,7,7,7,7,7,7,7,7,7,7,7,7]);
   toast('Escala exportada para Excel');
 }
 
