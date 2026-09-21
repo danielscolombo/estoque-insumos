@@ -1602,7 +1602,9 @@ function gerarExcel(){
       const f=d.noMes?FER[d.dia]:null;
       const st=!d.noMes?'cabFora':(f?'cabFer':(d.dow===0?'cabDom':'cab'));
       cab[COL(i)]  ={v:DOW[d.dow]+(f?' FERIADO':''),s:st};
-      cab[COL(i)+1]={v:d.noMes?pad(d.dia):'',s:st};
+      // o dia vai como NÚMERO de verdade. Escrito como texto, o Excel
+      // marca a célula com o triângulo verde de "número como texto".
+      cab[COL(i)+1]=d.noMes?{n:d.dia,s:st}:{v:'',s:st};
     });
     F.add(cab,temFer?26:22);
 
