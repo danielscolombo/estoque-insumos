@@ -393,6 +393,10 @@ tbody tr:hover td.s-date,tbody tr:hover td.s-loja{background:var(--surface-2)!im
     <div class="fbar">
       <div class="fg"><label>Loja</label><select id="hLoja" onchange="renderHist()"><option value="">Todas</option></select></div>
       <div class="fg"><label>Mês</label><select id="hMes" onchange="renderHist()"><option value="">Todos</option></select></div>
+      <div class="fg"><label>Mostrar</label><select id="hQuais" onchange="renderHist()">
+        <option value="ultima">Só a última contagem de cada loja</option>
+        <option value="todas">Todas as contagens</option>
+      </select></div>
     </div>
     <div class="pad" id="histContent"><div class="loading"><div class="spin"></div> Carregando…</div></div>
   </div>
@@ -614,7 +618,11 @@ async function fetchEntries() {
   const j = await lerComPaciencia(SCRIPT_URL);
   _loaded = true;
   if (j && Array.isArray(j.entries)) {
-    _entries = j.entries.map(e => ({...e, data: normData(e.data)}));
+    // a planilha devolve 126 como NÚMERO e SCS como texto. Sem igualar
+    // aqui, "126" do seletor nunca casava com 126 da planilha — e por
+    // isso a contagem do mesmo dia duplicava em vez de substituir.
+    _entries = j.entries.map(e => ({...e, loja: String(e.loja==null?'':e.loja).trim(),
+                                          data: normData(e.data)}));
     updateHdrSub();
     return true;
   }
@@ -795,7 +803,7 @@ async function salvar(){
   // nao estou corrigindo, mas ja existe contagem dessa loja nesse dia:
   // em vez de duplicar, substitui — e isso e ato de gestor.
   if(!id){
-    const rep=_entries.find(x=>x.loja===loja && x.data===data);
+    const rep=_entries.find(x=>String(x.loja).trim()===String(loja).trim() && x.data===data);
     if(rep){
       const s=prompt('Já existe contagem desta loja em '+fmtDate(data)+
         '.\nPara substituir, digite a senha de admin:');
@@ -851,23 +859,48 @@ function refreshMeses(){
   document.getElementById('hMes').innerHTML='<option value="">Todos os meses</option>'+
     m.map(x=>`<option value="${x}">${fmtMes(x)}</option>`).join('');
 }
+// quando duas contagens caem no mesmo dia, a mais nova é a que foi
+// gravada por último: vale o carimbo de hora da planilha, e na falta
+// dele o id, que nasce do relógio.
+function maisNova(e){
+  const t=Date.parse(e&&e.ts);
+  if(!isNaN(t)) return t;
+  const n=parseInt(e&&e.id,10);
+  return isNaN(n)?0:n;
+}
 function renderHist(){
   refreshMeses();
   const lF=document.getElementById('hLoja').value,mF=document.getElementById('hMes').value;
   let ents=[..._entries];
-  if(lF)ents=ents.filter(e=>e.loja===lF);
+  if(lF)ents=ents.filter(e=>String(e.loja).trim()===String(lF).trim());
   if(mF)ents=ents.filter(e=>e.data.startsWith(mF));
-  // todas as contagens, da mais nova para a mais antiga
   ents=ents.filter(e=>e.data).sort((a,b)=>
-    (b.data||'').localeCompare(a.data||'') || String(a.loja).localeCompare(String(b.loja)));
+    (b.data||'').localeCompare(a.data||'') || maisNova(b)-maisNova(a)
+    || String(a.loja).localeCompare(String(b.loja)));
+  const todas=ents.length;
+  // Por padrão a tela mostra o retrato de hoje: a última contagem de
+  // cada loja, uma linha por loja. O histórico inteiro continua ali, no
+  // seletor "Todas as contagens" — nada é apagado.
+  const quaisEl=document.getElementById('hQuais');
+  const quais=quaisEl?quaisEl.value:'ultima';
+  let escondidas=0;
+  if(quais!=='todas'){
+    const vistas={};
+    ents=ents.filter(e=>{ const k=String(e.loja).trim().toUpperCase();
+      if(vistas[k]){ escondidas++; return false; } vistas[k]=1; return true; });
+  }
   const wrap=document.getElementById('histContent');
   if(!ents.length){wrap.innerHTML=emptyEl('📭','Nenhum registro','Registre o primeiro abastecimento.');return;}
-  const lojas=new Set(ents.map(e=>e.loja));
+  const lojas=new Set(ents.map(e=>String(e.loja).trim()));
   let html=`<div class="srow" style="margin-bottom:10px;">
-    <div class="sc"><div class="v">${ents.length}</div><div class="l">Registros</div></div>
+    <div class="sc"><div class="v">${ents.length}</div><div class="l">${quais==='todas'?'Registros':'Lojas na lista'}</div></div>
     <div class="sc"><div class="v">${lojas.size}</div><div class="l">Lojas</div></div>
     <div class="sc"><div class="v">${fmtDate(ents[0].data)}</div><div class="l">Recente</div></div>
   </div>`;
+  if(escondidas)
+    html+=`<div class="pat" style="margin:0 0 10px;font-size:.78rem;color:var(--muted);">
+      Mostrando a última contagem de cada loja. Outras ${escondidas} contagem(ns) mais antiga(s)
+      estão guardadas — escolha <strong>Todas as contagens</strong> para ver e corrigir.</div>`;
   GRUPOS.forEach(g=>{
     html+=`<div class="card" style="margin-bottom:10px;">
       <div class="card-hdr"><span class="gbadge" style="background:${g.cor}">${g.emoji} ${g.label}</span></div>
