@@ -14,6 +14,8 @@
   <meta name="apple-mobile-web-app-title" content="Insumos">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="mobile-web-app-capable" content="yes">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
   <title>Estoque de Insumos</title>
   <style>
 /* ═══════════════════════════════════════════════════════════
@@ -428,6 +430,9 @@ tbody tr:hover td.s-date,tbody tr:hover td.s-loja{background:var(--surface-2)!im
           <option value="ok">🟢 OK</option>
         </select>
       </div>
+    </div>
+    <div class="pad" style="display:flex;justify-content:flex-end;padding-top:12px;">
+      <button class="btn-prim" id="btnPdfCompras" onclick="gerarPDFCompras()">📄 Gerar PDF</button>
     </div>
     <div class="pad">
       <div class="alert alert-warn" style="font-size:.78rem;">🔴 Crítico = abaixo do mínimo · 🟡 Atenção = abaixo do consumo médio · 🟢 OK</div>
@@ -1000,6 +1005,74 @@ function renderConsumo(){
 //
 // Mínimo zero é o jeito de dizer "não controlo este item": ele nunca
 // fica crítico e nunca gera sugestão de compra.
+function gerarPDFCompras(){
+  if(!(window.jspdf&&window.jspdf.jsPDF)){toast('PDF ainda carregando, tente de novo','info');return;}
+  if(!_entries.length){toast('Sem dados para gerar','info');return;}
+  const lF=document.getElementById('cpLoja').value,gF=document.getElementById('cpGrupo').value,sF=document.getElementById('cpSt').value;
+  const consumo=calcConsumo();
+  const ultEst={};_entries.forEach(e=>{if(!ultEst[e.loja]||e.data>ultEst[e.loja].data)ultEst[e.loja]=e;});
+  const _ag=GRUPOS.filter(g=>g.ativo!==false);
+  const ljs=lF?[lF]:LOJAS,grps=gF?_ag.filter(g=>g.id===gF):_ag;
+  const blocos=[];
+  ljs.forEach(loja=>{
+    const lat=ultEst[loja]||null,lC=consumo[loja]||{},m3=Object.keys(lC).sort().slice(-3);
+    const linhas=[];
+    grps.forEach(g=>{
+      g.itens.forEach(item=>{
+        const k=`${g.id}||${item.nome}`;
+        const bruto=lat?lat.insumos[k]:undefined;
+        const est=(bruto===null||bruto===undefined)?0:bruto;
+        const min=Number(item.min)||0;
+        const mc=m3.filter(m=>lC[m]?.[k]!=null);
+        const media=mc.length?mc.reduce((s,m)=>s+(lC[m][k]||0),0)/mc.length:0;
+        let status,sug;
+        if(min<=0){status='ok';sug=0;}
+        else if(est<min){status='critico';sug=Math.ceil(Math.max(min,media*1.5)-est);}
+        else if(est<min*1.5||(media>0&&est<media)){status='atencao';sug=Math.ceil(Math.max(0,media*1.2-est));}
+        else{status='ok';sug=0;}
+        if(sF&&status!==sF)return;
+        linhas.push({grupo:g.label,insumo:item.nome,est,min,media,status,sug});
+      });
+    });
+    if(linhas.length)blocos.push({loja,semContagem:!lat,data:lat?lat.data:'',linhas});
+  });
+  if(!blocos.length){toast('Nada para gerar com esses filtros','info');return;}
+  const {jsPDF}=window.jspdf;const doc=new jsPDF({unit:'pt',format:'a4'});
+  const W=doc.internal.pageSize.getWidth();
+  const hoje=new Date().toLocaleDateString('pt-BR');
+  const stLabel={critico:'Critico',atencao:'Atencao',ok:'OK'};
+  const stFill={critico:[254,226,226],atencao:[254,243,199],ok:[220,252,231]};
+  const stTxt={critico:[163,43,37],atencao:[138,90,0],ok:[24,107,81]};
+  doc.setFillColor(110,36,64);doc.rect(0,0,W,52,'F');
+  doc.setTextColor(255);doc.setFont('helvetica','bold');doc.setFontSize(15);
+  doc.text('PEDIDO DE COMPRA - INSUMOS',W/2,25,{align:'center'});
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  const stF={'':'Todos',critico:'Criticos',atencao:'Atencao',ok:'OK'}[sF];
+  doc.text('Gerado em '+hoje+'   |   Loja: '+(lF||'Todas')+'   |   Grupo: '+(gF||'Todos')+'   |   Status: '+stF,W/2,41,{align:'center'});
+  let y=66;
+  blocos.forEach(b=>{
+    let sub=b.loja;
+    if(b.semContagem)sub+='   (sem contagem - tudo zero)';
+    else{const d=new Date(b.data);sub+='   (ultima: '+(isNaN(d)?b.data:d.toLocaleDateString('pt-BR'))+')';}
+    const body=b.linhas.map(l=>[l.grupo,l.insumo,String(l.est),l.min>0?String(l.min):'-',l.media>0?l.media.toFixed(1):'-',stLabel[l.status],l.sug>0?l.sug+' un':'-']);
+    doc.autoTable({
+      startY:y,
+      head:[[{content:sub,colSpan:7,styles:{halign:'left',fillColor:[29,111,164],textColor:255,fontStyle:'bold',fontSize:10}}],
+            ['Grupo','Insumo','Estoque','Min','Media/mes','Status','Comprar']],
+      body,
+      styles:{fontSize:8,cellPadding:3,lineColor:[209,213,219],lineWidth:0.4},
+      headStyles:{fillColor:[226,232,240],textColor:[80,70,75],fontStyle:'bold'},
+      columnStyles:{2:{halign:'center'},3:{halign:'center'},4:{halign:'center'},5:{halign:'center'},6:{halign:'center',fontStyle:'bold'}},
+      didParseCell:(d)=>{if(d.section==='body'&&d.column.index===5){const l=b.linhas[d.row.index];d.cell.styles.fillColor=stFill[l.status];d.cell.styles.textColor=stTxt[l.status];}},
+      margin:{left:22,right:22}
+    });
+    y=doc.lastAutoTable.finalY+12;
+    if(y>760){doc.addPage();y=40;}
+  });
+  const nome='Pedido_Compras_'+((lF||'Todas').replace(/[^0-9A-Za-z]+/g,'-'))+'_'+new Date().toISOString().slice(0,10)+'.pdf';
+  doc.save(nome);
+  toast('PDF gerado','ok');
+}
 function renderCompras(){
   const lF=document.getElementById('cpLoja').value,gF=document.getElementById('cpGrupo').value,sF=document.getElementById('cpSt').value;
   const consumo=calcConsumo();const wrap=document.getElementById('comprasContent');
