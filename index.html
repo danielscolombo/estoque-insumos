@@ -176,10 +176,8 @@ tbody tr:hover td{background:var(--surface-2);}
 .bdg{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:6px;font-size:.66rem;
   font-weight:600;letter-spacing:.3px;border:1px solid transparent;}
 .bdg-ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-line);}
-/* item que a loja deixou em branco: conta como zero, mas fica dito */
-.nc{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:5px;font-size:.6rem;
-  font-weight:700;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;
-  background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line);}
+/* mínimo zero = item que não é controlado */
+.semmin{color:var(--muted);}
 .bdg-warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line);}
 .bdg-crit{background:var(--crit-bg);color:var(--crit);border-color:var(--crit-line);}
 
@@ -995,11 +993,13 @@ function renderConsumo(){
   wrap.innerHTML=html;
 }
 // ── O QUE NÃO FOI CONTADO VALE ZERO
-// Item que a loja deixou em branco não some da tela de compras: entra
-// como estoque zero, que é o que ele é na prática — e é justamente o
-// que precisa ser comprado. A linha fica marcada como "não contado"
-// para ninguém confundir com uma contagem feita que deu zero.
-// Loja que não mandou contagem nenhuma também aparece, com tudo zerado.
+// Item deixado em branco é zero: se a loja não marcou, é porque não
+// tem. Entra na tela de compras como estoque zero, em vez de sumir —
+// que é justamente o que precisa ser comprado. Loja que não mandou
+// contagem nenhuma também aparece, com tudo zerado.
+//
+// Mínimo zero é o jeito de dizer "não controlo este item": ele nunca
+// fica crítico e nunca gera sugestão de compra.
 function renderCompras(){
   const lF=document.getElementById('cpLoja').value,gF=document.getElementById('cpGrupo').value,sF=document.getElementById('cpSt').value;
   const consumo=calcConsumo();const wrap=document.getElementById('comprasContent');
@@ -1021,20 +1021,21 @@ function renderCompras(){
       g.itens.forEach(item=>{
         const k=`${g.id}||${item.nome}`;
         const bruto=lat?lat.insumos[k]:undefined;
-        const semContagem=(bruto===null||bruto===undefined);
-        const est=semContagem?0:bruto;          // não contado = zero
+        const est=(bruto===null||bruto===undefined)?0:bruto;   // em branco = zero
+        const min=Number(item.min)||0;
         const mc=m3.filter(m=>lC[m]?.[k]!=null);
         const media=mc.length?mc.reduce((s,m)=>s+(lC[m][k]||0),0)/mc.length:0;
         let status,sug,bcls;
-        if(est<item.min){status='critico';sug=Math.ceil(Math.max(item.min,media*1.5)-est);bcls='bdg-crit';}
-        else if(est<item.min*1.5||(media>0&&est<media)){status='atencao';sug=Math.ceil(Math.max(0,media*1.2-est));bcls='bdg-warn';}
+        if(min<=0){status='ok';sug=0;bcls='bdg-ok';}           // não controlado
+        else if(est<min){status='critico';sug=Math.ceil(Math.max(min,media*1.5)-est);bcls='bdg-crit';}
+        else if(est<min*1.5||(media>0&&est<media)){status='atencao';sug=Math.ceil(Math.max(0,media*1.2-est));bcls='bdg-warn';}
         else{status='ok';sug=0;bcls='bdg-ok';}
         if(sF&&status!==sF)return;
         temItem=true;
         const sl=status==='critico'?'🔴 Crítico':status==='atencao'?'🟡 Atenção':'🟢 OK';
         rows+=`<tr><td><strong>${item.nome}</strong></td>
-          <td>${est}${semContagem?'<span class="nc" title="A loja não preencheu este item — está contando como zero">não contado</span>':''}</td>
-          <td class="col-m-hide">${item.min}</td><td class="col-m-hide">${media>0?media.toFixed(1):'—'}</td>
+          <td>${est}</td>
+          <td class="col-m-hide">${min>0?min:'<span class="semmin" title="Mínimo zero: este item não é controlado">—</span>'}</td><td class="col-m-hide">${media>0?media.toFixed(1):'—'}</td>
           <td><span class="bdg ${bcls}">${sl}</span></td>
           <td>${sug>0?`<span class="qty ${status==='critico'?'qty-c':'qty-w'}">${sug} un</span>`:'<span class="qty-0">—</span>'}</td></tr>`;
       });
@@ -1140,7 +1141,7 @@ function renderAdminInsumos(body,foot){
             <div class="ai-min-wrap">
               <span>Mín:</span>
               <input class="ai-min-input" type="number" min="0" value="${item.min}"
-                onchange="_adminGrupos[${gi}].itens[${ii}].min=parseInt(this.value)||1">
+                onchange="_adminGrupos[${gi}].itens[${ii}].min=Math.max(0,parseInt(this.value)||0)">
             </div>
             <button class="btn-xs btn-xs-del" onclick="delItem(${gi},${ii})">✕</button>
           </div>`).join('')}
