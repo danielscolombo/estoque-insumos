@@ -176,6 +176,10 @@ tbody tr:hover td{background:var(--surface-2);}
 .bdg{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:6px;font-size:.66rem;
   font-weight:600;letter-spacing:.3px;border:1px solid transparent;}
 .bdg-ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-line);}
+/* item que a loja deixou em branco: conta como zero, mas fica dito */
+.nc{display:inline-block;margin-left:6px;padding:1px 6px;border-radius:5px;font-size:.6rem;
+  font-weight:700;letter-spacing:.3px;text-transform:uppercase;white-space:nowrap;
+  background:var(--warn-bg);color:var(--warn);border:1px solid var(--warn-line);}
 .bdg-warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line);}
 .bdg-crit{background:var(--crit-bg);color:var(--crit);border-color:var(--crit-line);}
 
@@ -990,24 +994,35 @@ function renderConsumo(){
   });
   wrap.innerHTML=html;
 }
+// ── O QUE NÃO FOI CONTADO VALE ZERO
+// Item que a loja deixou em branco não some da tela de compras: entra
+// como estoque zero, que é o que ele é na prática — e é justamente o
+// que precisa ser comprado. A linha fica marcada como "não contado"
+// para ninguém confundir com uma contagem feita que deu zero.
+// Loja que não mandou contagem nenhuma também aparece, com tudo zerado.
 function renderCompras(){
   const lF=document.getElementById('cpLoja').value,gF=document.getElementById('cpGrupo').value,sF=document.getElementById('cpSt').value;
   const consumo=calcConsumo();const wrap=document.getElementById('comprasContent');
   const ultEst={};
   _entries.forEach(e=>{if(!ultEst[e.loja]||e.data>ultEst[e.loja].data)ultEst[e.loja]=e;});
-  if(!Object.keys(ultEst).length){wrap.innerHTML=emptyEl('🛒','Nenhum dado','Registre abastecimentos para sugestões.');return;}
+  // sem NENHUMA contagem na rede é mais provável que a planilha não
+  // tenha respondido do que a rede estar zerada — não pinta tudo de
+  // vermelho à toa
+  if(!_entries.length){wrap.innerHTML=emptyEl('🛒','Nenhum dado','Registre abastecimentos para sugestões.');return;}
   const _ag=GRUPOS.filter(g=>g.ativo!==false);
   const ljs=lF?[lF]:LOJAS,grps=gF?_ag.filter(g=>g.id===gF):_ag;
   let html='',temItem=false;
   ljs.forEach(loja=>{
-    if(!ultEst[loja])return;
-    const lat=ultEst[loja],lC=consumo[loja]||{},m3=Object.keys(lC).sort().slice(-3);
+    const lat=ultEst[loja]||null;
+    const lC=consumo[loja]||{},m3=Object.keys(lC).sort().slice(-3);
     let tbody='';
     grps.forEach(g=>{
       let rows='';
       g.itens.forEach(item=>{
-        const k=`${g.id}||${item.nome}`,est=lat.insumos[k];
-        if(est===null||est===undefined)return;
+        const k=`${g.id}||${item.nome}`;
+        const bruto=lat?lat.insumos[k]:undefined;
+        const semContagem=(bruto===null||bruto===undefined);
+        const est=semContagem?0:bruto;          // não contado = zero
         const mc=m3.filter(m=>lC[m]?.[k]!=null);
         const media=mc.length?mc.reduce((s,m)=>s+(lC[m][k]||0),0)/mc.length:0;
         let status,sug,bcls;
@@ -1018,7 +1033,7 @@ function renderCompras(){
         temItem=true;
         const sl=status==='critico'?'🔴 Crítico':status==='atencao'?'🟡 Atenção':'🟢 OK';
         rows+=`<tr><td><strong>${item.nome}</strong></td>
-          <td>${est}</td>
+          <td>${est}${semContagem?'<span class="nc" title="A loja não preencheu este item — está contando como zero">não contado</span>':''}</td>
           <td class="col-m-hide">${item.min}</td><td class="col-m-hide">${media>0?media.toFixed(1):'—'}</td>
           <td><span class="bdg ${bcls}">${sl}</span></td>
           <td>${sug>0?`<span class="qty ${status==='critico'?'qty-c':'qty-w'}">${sug} un</span>`:'<span class="qty-0">—</span>'}</td></tr>`;
@@ -1026,7 +1041,7 @@ function renderCompras(){
       if(rows)tbody+=`<tr class="trow-g"><td colspan="6">${g.emoji} ${g.label}</td></tr>${rows}`;
     });
     if(tbody)html+=`<div class="lb">
-      <div class="lb-hdr">🏪 ${loja}<span class="sub">Último: ${fmtDate(lat.data)}</span></div>
+      <div class="lb-hdr">🏪 ${loja}<span class="sub">${lat?('Último: '+fmtDate(lat.data)):'⚠️ sem contagem — tudo como zero'}</span></div>
       <div class="tbl-wrap cprs-wrap"><table class="cprs-tbl"><thead><tr>
         <th>INSUMO</th><th>ESTOQUE</th><th class="col-m-hide">MÍN</th><th class="col-m-hide">MÉDIA/MÊS</th><th>STATUS</th><th>COMPRAR</th>
       </tr></thead><tbody>${tbody}</tbody></table></div></div>`;
