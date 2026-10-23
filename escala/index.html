@@ -679,6 +679,19 @@ table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-w
   body>#impressao{display:block !important;position:static !important;}
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 }
+/* nomes do Sólides */
+.ln span .nova,td.nm .nova{font-style:normal;font-size:.56rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
+  margin-left:6px;padding:1px 5px;border-radius:4px;background:var(--plum-soft);color:var(--plum);white-space:nowrap;}
+.lin.vend{flex-wrap:wrap;}
+.lin.vend .vinc{flex-basis:100%;font-size:.72rem;color:var(--muted,#6B5B66);margin:2px 0 6px;}
+.lin.vend .vinc.ok{color:var(--ink,#241A21);}
+.lin.vend .vinc span{color:var(--muted,#6B5B66);}
+.lin.vend .vinc .vsel{display:inline-block;width:auto;max-width:100%;font-size:.72rem;padding:3px 6px;margin-left:4px;}
+.novas{margin:14px 0 6px;padding:10px 12px;border:1px dashed var(--line,#E4DAE0);border-radius:10px;}
+.novas h4{margin:0 0 4px;font-size:.78rem;}
+.lin.nova{display:flex;align-items:center;gap:8px;margin:6px 0;}
+.lin.nova .nm{flex:1;min-width:0;font-size:.82rem;}
+.lin.nova .nm small{color:var(--muted,#6B5B66);}
 </style>
 </head>
 <body>
@@ -1068,6 +1081,7 @@ let lendo = false;
 // Versões da escala. A aba Escalas guarda sempre a que vale hoje;
 // as anteriores ficam arquivadas e são lidas sob demanda.
 let VERS={};                // { "loja|mes": [ {versao,situacao,motivo,...} ] }
+let PESS={};                // { loja: [ {nome, escala, admissao} ] } — Sólides + cadastro de benefícios (só nomes)
 let VCACHE={};              // { "loja|mes|v": { vendedora: {dia: rotulo} } }
 
 const $=s=>document.querySelector(s);
@@ -1237,9 +1251,144 @@ function daEscala(l,m){
   Object.keys(e).forEach(n=>{ const k=norm(n);
     if(vistos[k] || !tem(n)) return;
     if(!validado && noCad[k]) return;
-    vistos[k]=1; out.push({nome:n,ativa:false});
+    vistos[k]=1; out.push({nome:n,ativa:false,novo:!!pessoaPorNome(l,n)});
   });
+  // Quem entrou no Sólides e ainda não está no cadastro da escala já
+  // aparece no mês aberto (rascunho ou versão nova), para a gerente lançar
+  // os dias. Mês validado é retrato: só ganha gente quando for reaberto.
+  if(!validado || !dentro.length){
+    novasDoSolides(l).forEach(p=>{
+      const k=norm(p.nome); if(vistos[k]) return;
+      vistos[k]=1; out.push({nome:p.nome,ativa:true,novo:true,admissao:p.admissao||''});
+    });
+  }
   return out;
+}
+
+// ═══════════════════════════════════════════════════
+// NOMES — o mesmo da tabela de benefícios (Sólides)
+// A escala guarda cada pessoa pelo nome curto do cadastro ("KATIA"); na
+// tela, no PDF e no Excel aparece o nome do contrato: o primeiro nome —
+// composto, se for ("Ana Paula") — e o último sobrenome. Se ficar
+// comprido, abrevia. A chave gravada na planilha não muda.
+// ═══════════════════════════════════════════════════
+const semAc=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+const chaveNm=s=>semAc(s).replace(/[^A-Z0-9]/g,'');
+const tokens=s=>semAc(s).split(/[^A-Z0-9]+/).filter(Boolean);
+const LIGA={DE:1,DA:1,DO:1,DAS:1,DOS:1,E:1,D:1};
+const SUFX={FILHO:1,FILHA:1,JUNIOR:1,JR:1,NETO:1,NETA:1,SOBRINHO:1,SOBRINHA:1};
+// segundo nome que forma nome composto ("Ana Paula", "João Pedro"); o
+// que não estiver aqui é tratado como sobrenome
+const COMPOSTO=new Set(('ANA MARIA PAULA CLARA JULIA LUIZA LUISA EDUARDA BEATRIZ CAROLINA CAROLINE CRISTINA LUCIA FERNANDA '+
+  'GABRIELA GABRIELLA VITORIA VICTORIA ALICE CECILIA HELENA LAURA LETICIA RITA ROSA SOFIA SOPHIA TERESA TEREZA ISABEL ISABELA '+
+  'ISABELLA ISABELE ISABELLE LUANA CAMILA FLAVIA JULIANA RAFAELA LARISSA MARIANA MARINA VALENTINA ELISA ELIZA HELOISA LIVIA '+
+  'LORENA MANUELA NICOLE YASMIN APARECIDA CLAUDIA SILVIA LUCIANA ADRIANA PATRICIA RENATA DANIELA VANESSA JESSICA BEATRIS '+
+  'ELOISA EMANUELLE EMANUELLY EMILY KAROLINE KAROLINA VITORIA LUIZE LAIS RAQUEL REGINA ROSANA SIMONE SANDRA SUELEN '+
+  'CRISTIANE ELAINE EDUARDO JOSE JOAO PEDRO PAULO CARLOS LUIZ LUIS ANTONIO HENRIQUE GABRIEL VITOR VICTOR MIGUEL RICARDO '+
+  'ROBERTO FERNANDO AUGUSTO GUSTAVO FELIPE LUCAS MATHEUS MATEUS RAFAEL DANIEL ARTHUR ARTUR DAVI CESAR VINICIUS').split(' '));
+const DEVOC=new Set('FATIMA LOURDES JESUS NAZARE CONCEICAO GRACA GRACAS PENHA GLORIA LUZ PAZ'.split(' '));
+function capPal(w,i){
+  const b=String(w||'').toLocaleLowerCase('pt-BR');
+  return (i>0&&LIGA[semAc(b)]) ? b : b.charAt(0).toLocaleUpperCase('pt-BR')+b.slice(1);
+}
+const MAX_NOME=18;
+function nomeCurto(cheio){
+  const p=String(cheio||'').replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
+  if(!p.length) return '';
+  const cap=a=>a.map(capPal).join(' ');
+  if(p.length===1) return cap(p);
+  // primeiro nome, composto se for
+  let ini=[p[0]], resto=p.slice(1);
+  if(p.length>=3 && COMPOSTO.has(semAc(p[1]))){ ini=[p[0],p[1]]; resto=p.slice(2); }
+  else if(p.length>=4 && LIGA[semAc(p[1])] && DEVOC.has(semAc(p[2]))){ ini=[p[0],p[1],p[2]]; resto=p.slice(3); }
+  // último sobrenome (Filho/Júnior/Neto vão junto)
+  let fim=resto.length-1;
+  if(fim>0 && SUFX[semAc(resto[fim]).replace(/\./g,'')]) fim--;
+  const sob=fim>=0 ? resto.slice(fim) : [];
+  const ii=ini.map((w,i)=>capPal(w,i)), ss=sob.map(w=>capPal(w,1).replace(/^./,c=>c.toLocaleUpperCase('pt-BR')));
+  let t=ii.concat(ss).join(' ');
+  if(t.length<=MAX_NOME) return t;
+  // comprido: abrevia o segundo nome do composto ("Ana P. Lima")
+  if(ii.length>1){ t=[ii[0], ii[ii.length-1].charAt(0)+'.'].concat(ss).join(' '); if(t.length<=MAX_NOME) return t; }
+  // ainda comprido: só primeiro e último
+  t=[ii[0]].concat(ss).join(' '); if(t.length<=MAX_NOME) return t;
+  // e, no limite, o sobrenome vira inicial
+  return ii[0]+(ss.length?' '+ss[0].charAt(0)+'.':'');
+}
+function nomeDesempate(cheio){
+  const p=String(cheio||'').replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
+  if(p.length<3) return '';
+  const curto=nomeCurto(cheio).split(' ');
+  const ult=curto[curto.length-1];
+  const meio=p.slice(1,-1).find(w=>!LIGA[semAc(w)] && curto.indexOf(capPal(w,1).replace(/^./,c=>c.toLocaleUpperCase('pt-BR')))<0);
+  if(!meio) return '';
+  return curto.slice(0,-1).concat([meio.charAt(0).toLocaleUpperCase('pt-BR')+'.', ult]).join(' ');
+}
+// lista da loja; sem ela ainda (primeira pintura, sem rede), a do aparelho
+function pessDe(l){
+  if(!PESS[l]){ try{ const g=JSON.parse(localStorage.getItem('escPess:'+l)||'null'); if(Array.isArray(g)) PESS[l]=g; }catch(_){} }
+  return PESS[l]||[];
+}
+// a pessoa do Sólides que corresponde a um nome da escala
+function pessoaPorNome(l,n){
+  const ps=pessDe(l); if(!ps.length || !n) return null;
+  const k=chaveNm(n);
+  let p=ps.find(x=>chaveNm(x.nome)===k); if(p) return p;
+  return null;
+}
+function pessoaDaVendedora(l,v){
+  const ps=pessDe(l); if(!ps.length) return null;
+  if(v.solides){ const p=ps.find(x=>chaveNm(x.nome)===chaveNm(v.solides)); if(p) return p; }
+  const k=chaveNm(v.nome);
+  let p=ps.find(x=>chaveNm(x.nome)===k) || ps.find(x=>x.escala && chaveNm(x.escala)===k);
+  if(p) return p;
+  // "THAIS CAMPOS" casa com "Thais Campos da Silva" — se for uma só
+  const vt=tokens(v.nome); if(!vt.length) return null;
+  const c=ps.filter(x=>{ const pt=tokens(x.nome); return vt.every(t=>pt.indexOf(t)>=0); });
+  return c.length===1 ? c[0] : null;
+}
+// quem do Sólides não corresponde a ninguém do cadastro da escala
+function novasDoSolides(l){
+  const ps=pessDe(l); if(!ps.length) return [];
+  const usados={};
+  cadLoja(l).vendedoras.forEach(v=>{ const p=pessoaDaVendedora(l,v); if(p) usados[chaveNm(p.nome)]=1; });
+  return ps.filter(p=>!usados[chaveNm(p.nome)]);
+}
+// nome que aparece (tela, PDF, Excel, conferência) para uma chave da escala
+const _nmVer={};
+function nomeVer(n,l){
+  l=l||loja;
+  if(!n || n==='—') return n;
+  const ck=l+'|'+pessDe(l).length+'|'+cadLoja(l).vendedoras.map(v=>v.nome+'~'+(v.solides||'')).join('§');
+  if(!_nmVer[ck]){
+    const t={}, cont={};
+    const cad=cadLoja(l).vendedoras;
+    const todas=cad.map(v=>({k:v.nome, p:pessoaDaVendedora(l,v)}))
+      .concat((PESS[l]||[]).map(p=>({k:p.nome,p:p})));
+    const pessoasDist={};                       // a mesma pessoa (cadastro + Sólides) conta uma vez
+    todas.forEach(x=>{ const c=x.p?x.p.nome:x.k; const kk=norm(x.k); if(t[kk]) return;
+      t[kk]={cheio:c,curto:nomeCurto(c)};
+      const pk=chaveNm(c); if(pessoasDist[pk]) return; pessoasDist[pk]=1;
+      const z=chaveNm(t[kk].curto); cont[z]=(cont[z]||0)+1; });
+    // duas com o mesmo curto: ganham a inicial do nome do meio ("Ana S. Lima")
+    Object.keys(t).forEach(kk=>{ if(cont[chaveNm(t[kk].curto)]>1) t[kk].curto=nomeDesempate(t[kk].cheio)||t[kk].curto; });
+    Object.keys(_nmVer).forEach(k=>{ if(k.split('|')[0]===l) delete _nmVer[k]; });
+    _nmVer[ck]=t;
+  }
+  const r=_nmVer[ck][norm(n)];
+  return r ? r.curto : nomeCurto(n);
+}
+// quem veio do Sólides e ainda não está no cadastro da escala
+function marcaNova(v){
+  if(!v || !v.novo || v.ativa===false) return '';
+  const desde=v.admissao?String(v.admissao).slice(8,10)+'/'+String(v.admissao).slice(5,7):'';
+  return '<i class="nova" title="Entrou no Sólides'+(desde?' em '+desde:'')+' e ainda não está no cadastro da escala">nova'+(desde?' · '+desde:'')+'</i>';
+}
+function nomeCheioVer(n,l){
+  l=l||loja;
+  const v=cadLoja(l).vendedoras.find(x=>norm(x.nome)===norm(n));
+  const p=v ? pessoaDaVendedora(l,v) : pessoaPorNome(l,n);
+  return p ? p.nome : n;
 }
 function diasNoMes(m){ const [a,b]=m.split('-').map(Number); return new Date(a,b,0).getDate(); }
 function dataDe(m,d){ const [a,b]=m.split('-').map(Number); return new Date(a,b-1,d); }
@@ -1387,6 +1536,8 @@ async function carregarTudo(){
     try{ localStorage.setItem('escCfg',JSON.stringify({lojas:LOJAS,cad:CAD})); }catch(_){}
     LOJAS.forEach(cadLoja);
     STATUS={}; (j.status||[]).forEach(x=>{STATUS[x.loja+'|'+x.mes]=x;});
+    // nomes do Sólides / benefícios desta loja (servidor novo; o antigo não manda)
+    if(Array.isArray(j.pessoas)){ PESS[loja]=j.pessoas; PESS_LIDO[loja]=true; try{ localStorage.setItem('escPess:'+loja,JSON.stringify(j.pessoas)); }catch(_){} }
     const m={}; (j.escala||[]).forEach(l=>{m[l.vendedora]=l.dias||{};});
     ESC[chave()]=m;
     try{ localStorage.setItem('esc:'+chave(),JSON.stringify(m)); }catch(_){}
@@ -1497,7 +1648,7 @@ function renderEscala(){
        '</div>';
     vs.forEach(v=>{
       const val=valor(v.nome,d);
-      h+='<div class="ln"><span>'+esc(v.nome)+'</span>'+
+      h+='<div class="ln"><span title="'+esc(nomeCheioVer(v.nome))+'">'+esc(nomeVer(v.nome))+marcaNova(v)+'</span>'+
          '<select class="'+classeDe(loja,val)+'"'+(BLOQ?' disabled':'')+' data-v="'+esc(v.nome)+'" data-d="'+d+'">'+opcoes(val)+'</select></div>';
     });
     h+='</div>';
@@ -1541,7 +1692,7 @@ function htmlImpressao(){
     });
     h+='</tr></thead><tbody>';
     vs.forEach(v=>{
-      h+='<tr><td class="nm">'+esc(v.nome)+'</td>';
+      h+='<tr><td class="nm">'+esc(nomeVer(v.nome))+'</td>';
       sem.forEach(d=>{
         if(!d.noMes){ h+='<td class="fora"></td>'; return; }
         const val=valor(v.nome,d.dia);
@@ -1609,7 +1760,7 @@ function gerarExcel(){
     F.add(cab,temFer?26:22);
 
     vs.forEach(v=>{
-      const li=[{v:v.nome,s:'nome'}];
+      const li=[{v:nomeVer(v.nome),s:'nome'}];
       sem.forEach((d,i)=>{
         const c=COL(i);
         if(!d.noMes){ li[c]={v:'',s:'fora'}; li[c+1]={v:'',s:'fora'}; return; }
@@ -1732,7 +1883,7 @@ function htmlGrade(vs){
     });
     h+='</tr></thead><tbody>';
     vs.forEach(v=>{
-      h+='<tr><td class="nm" title="'+esc(v.nome)+'">'+esc(v.nome)+'</td>';
+      h+='<tr><td class="nm" title="'+esc(nomeCheioVer(v.nome))+'">'+esc(nomeVer(v.nome))+marcaNova(v)+'</td>';
       sem.forEach(d=>{
         if(!d.noMes){ h+='<td class="cel fora"><select class="g" disabled><option></option></select></td>'; return; }
         const val=valor(v.nome,d.dia);
@@ -1777,7 +1928,7 @@ function htmlResumoSig(vs){
     });
     h+='</tr></thead><tbody>';
     vs.forEach(v=>{
-      h+='<tr><td class="nm" title="'+esc(v.nome)+'">'+esc(v.nome)+'</td>';
+      h+='<tr><td class="nm" title="'+esc(nomeCheioVer(v.nome))+'">'+esc(nomeVer(v.nome))+marcaNova(v)+'</td>';
       sem.forEach(d=>{
         if(!d.noMes){ h+='<td class="cel fora"></td>'; return; }
         const val=valor(v.nome,d.dia);
@@ -2044,7 +2195,7 @@ function htmlApontamentos(r){
     Object.keys(porRegra).forEach(k=>{
       h+='<div class="cf-r"><u>'+esc(ROT_REGRA[k]||k)+'</u>';
       porRegra[k].forEach(x=>{
-        h+='<div class="cf-i '+nv+'"><span class="q">'+esc(x.pessoa)+'</span>'+
+        h+='<div class="cf-i '+nv+'"><span class="q">'+esc(nomeVer(x.pessoa))+'</span>'+
            '<span class="t">'+esc(x.texto)+'</span><span class="b">'+esc(x.base)+'</span></div>';
       });
       h+='</div>';
@@ -2304,7 +2455,7 @@ async function compararVersao(v){
       ' em <b>'+dif.linhas.length+'</b> '+(dif.linhas.length>1?'pessoas':'pessoa')+'.</p>';
     h+='<div class="dlist">';
     dif.linhas.forEach(l=>{
-      h+='<div class="dit"><div class="dnm">'+esc(l.nome)+
+      h+='<div class="dit"><div class="dnm">'+esc(nomeVer(l.nome))+
          (l.novo?' <em class="vtag nova">entrou nesta versão</em>':'')+
          (l.saiu?' <em class="vtag saiu">saiu desta versão</em>':'')+'</div>';
       l.dias.forEach(d=>{
@@ -2484,7 +2635,7 @@ function renderResumo(){
       if(ehFolga(loja,val)) f++;
     }
     A+=s;B+=dm;C+=s+dm;D+=f;
-    h+='<tr><td>'+esc(v.nome)+'</td><td>'+s+'</td><td>'+dm+'</td><td>'+(s+dm)+'</td><td>'+f+'</td></tr>';
+    h+='<tr><td title="'+esc(nomeCheioVer(v.nome))+'">'+esc(nomeVer(v.nome))+'</td><td>'+s+'</td><td>'+dm+'</td><td>'+(s+dm)+'</td><td>'+f+'</td></tr>';
   });
   h+='<tr class="tot"><td>Total</td><td>'+A+'</td><td>'+B+'</td><td>'+C+'</td><td>'+D+'</td></tr></tbody>';
   $('#tbResumo').innerHTML=h;
@@ -2514,11 +2665,28 @@ function renderCadastro(){
     '<div class="card"><h3>Lojas</h3><div class="in" id="boxLoja"></div></div>'+
     '<div class="acoes-fim"><button class="bt" id="btSalvarCad">Salvar cadastro</button></div>';
 
+  const temPess=pessDe(loja).length>0;
+  const novas=novasDoSolides(loja);
+  const vincular=(v,i)=>{
+    if(!temPess) return '';
+    const p=pessoaDaVendedora(loja,v);
+    if(p) return '<div class="vinc ok" title="Nome do contrato (Sólides / benefícios)">'+esc(p.nome)+
+      ' <span>· aparece como <b>'+esc(nomeVer(v.nome))+'</b></span></div>';
+    return '<div class="vinc"><span>Não achei no Sólides.</span> <select class="fld vsel" data-vinc="'+i+'"><option value="">É a mesma que…</option>'+
+      novas.map(x=>'<option value="'+esc(x.nome)+'">'+esc(x.nome)+'</option>').join('')+'</select></div>';
+  };
   $('#boxVend').innerHTML=(c.vendedoras.length?c.vendedoras.map((v,i)=>
-    '<div class="lin" data-i="'+i+'"><input class="fld" data-c="nome" value="'+esc(v.nome)+'">'+
+    '<div class="lin vend" data-i="'+i+'"><input class="fld" data-c="nome" value="'+esc(v.nome)+'">'+
     '<button class="tog'+(v.ativa!==false?' on':'')+'" data-c="ativa">'+(v.ativa!==false?'Ativa':'Inativa')+'</button>'+
-    '<button class="del" data-x="vend">×</button></div>').join('')
+    '<button class="del" data-x="vend">×</button>'+vincular(v,i)+'</div>').join('')
     :'<div class="vazio">Nenhuma vendedora.</div>')+
+    (novas.length?'<div class="novas"><h4>Entraram no Sólides e não estão no cadastro</h4>'+
+      '<p class="dica">Já aparecem na escala do mês aberto para a gerente lançar os dias. Adicione ao cadastro, '+
+      'ou marque <b>Não entra</b> se a pessoa não faz escala (ex.: administrativo).</p>'+
+      novas.map((x,j)=>'<div class="lin nova" data-j="'+j+'"><span class="nm">'+esc(x.nome)+
+        (x.admissao?' <small>desde '+esc(String(x.admissao).slice(8,10)+'/'+String(x.admissao).slice(5,7))+'</small>':'')+'</span>'+
+        '<button class="bt q" data-nova="add" data-n="'+esc(x.nome)+'">Adicionar</button>'+
+        '<button class="bt q" data-nova="fora" data-n="'+esc(x.nome)+'">Não entra</button></div>').join('')+'</div>':'')+
     '<div class="addr"><input class="fld" id="novaVend" placeholder="Nome da vendedora"><button class="bt q" id="btAddVend">Adicionar</button></div>';
 
   $('#boxTur').innerHTML=
@@ -2618,6 +2786,21 @@ async function abrirMes(){
   sujo=false;
   renderEscala();
   travaSalvar();
+  // nomes do Sólides desta loja, se ainda não vieram nesta visita
+  if(!PESS_LIDO[loja]) carregarPessoas(loja).then(ok=>{ if(ok && !sujo){ renderEscala(); if(tela==='Cadastro') renderCadastro(); } });
+}
+// a lista de nomes do Sólides / benefícios da loja (vem na mesma rota da
+// escala; aqui só ela interessa)
+const PESS_LIDO={};
+async function carregarPessoas(l){
+  try{
+    const r=await fetchTO(SCRIPT_URL+'?action=tudo&loja='+encodeURIComponent(l)+'&mes='+encodeURIComponent(mes),{redirect:'follow'},22000);
+    const j=await r.json();
+    if(!j || !Array.isArray(j.pessoas)) return false;
+    PESS[l]=j.pessoas; PESS_LIDO[l]=true;
+    try{ localStorage.setItem('escPess:'+l,JSON.stringify(j.pessoas)); }catch(_){}
+    return true;
+  }catch(e){ return false; }
 }
 
 // enquanto a escala do mês não tiver sido lida do servidor, NÃO deixa gravar:
@@ -2833,6 +3016,14 @@ async function init(){
     const c=cadLoja(loja);
     const b=e.target;
     if(b.id==='btAddVend'){ const n=$('#novaVend').value.trim(); if(n){ c.vendedoras.push({nome:n,ativa:true}); renderCadastro(); } return; }
+    const nv=b.closest('[data-nova]');
+    if(nv){
+      const n=nv.dataset.n, dentro=nv.dataset.nova==='add';
+      c.vendedoras.push({nome:n,ativa:dentro,solides:n});
+      renderCadastro(); renderEscala();
+      toast(dentro?'Adicionada — clique em Salvar cadastro':'Fora da escala — clique em Salvar cadastro');
+      return;
+    }
     if(b.id==='btAddTur'){ c.turnos.push({entrada:'09:00',saida:'18:00',tipo:'INTERMEDIARIO'}); renderCadastro(); return; }
     if(b.id==='btAddAus'){ c.ausencias.push({rotulo:'NOVA',tipo:'AUSENCIA'}); renderCadastro(); return; }
     if(b.id==='btAddLoja'){ const n=$('#novaLoja').value.trim(); if(n&&LOJAS.indexOf(n)<0){ LOJAS.push(n); cadLoja(n); renderCadastro(); } return; }
@@ -2854,6 +3045,14 @@ async function init(){
       else if(x==='loja'){ if(LOJAS.length<2) return; LOJAS.splice(i,1); if(LOJAS.indexOf(loja)<0) loja=LOJAS[0]; }
       renderCadastro(); return;
     }
+  });
+  $('#cadCorpo').addEventListener('change',e=>{
+    const sel=e.target.closest('[data-vinc]'); if(!sel) return;
+    const c=cadLoja(loja), i=+sel.dataset.vinc;
+    if(!c.vendedoras[i]) return;
+    c.vendedoras[i].solides=sel.value||'';
+    renderCadastro(); renderEscala();
+    if(sel.value) toast('Ligada ao Sólides — clique em Salvar cadastro');
   });
   $('#cadCorpo').addEventListener('input',e=>{
     const campo=e.target.dataset.c; if(!campo) return;
