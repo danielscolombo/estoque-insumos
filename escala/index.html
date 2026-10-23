@@ -1345,7 +1345,17 @@ function pessoaDaVendedora(l,v){
   // "THAIS CAMPOS" casa com "Thais Campos da Silva" — se for uma só
   const vt=tokens(v.nome); if(!vt.length) return null;
   const c=ps.filter(x=>{ const pt=tokens(x.nome); return vt.every(t=>pt.indexOf(t)>=0); });
-  return c.length===1 ? c[0] : null;
+  if(c.length===1) return c[0];
+  if(c.length>1) return null;
+  // grafia diferente do mesmo nome: "MAYARA" × "Maiara", "THAIZ" × "Thais"
+  const vf=vt.map(fonetico);
+  const f=ps.filter(x=>{ const pf=tokens(x.nome).map(fonetico); return vf.every(t=>pf.indexOf(t)>=0); });
+  return f.length===1 ? f[0] : null;
+}
+// aproxima grafias do mesmo nome (Y/I, W/V, PH/F, TH/T, K/C, Z/S no fim, letra dobrada, H mudo)
+function fonetico(t){
+  return semAc(t).replace(/PH/g,'F').replace(/TH/g,'T').replace(/Y/g,'I').replace(/W/g,'V').replace(/K/g,'C')
+    .replace(/([^CLNS])H/g,'$1').replace(/^H/,'').replace(/Z$/,'S').replace(/(.)\1+/g,'$1');
 }
 // quem do Sólides não corresponde a ninguém do cadastro da escala
 function novasDoSolides(l){
