@@ -1291,7 +1291,7 @@ function capPal(w,i){
   const b=String(w||'').toLocaleLowerCase('pt-BR');
   return (i>0&&LIGA[semAc(b)]) ? b : b.charAt(0).toLocaleUpperCase('pt-BR')+b.slice(1);
 }
-const MAX_NOME=18;
+const MAX_NOME=20;            // cabe na coluna de nomes da grade
 function nomeCurto(cheio){
   const p=String(cheio||'').replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
   if(!p.length) return '';
@@ -1300,7 +1300,7 @@ function nomeCurto(cheio){
   // primeiro nome, composto se for
   let ini=[p[0]], resto=p.slice(1);
   if(p.length>=3 && COMPOSTO.has(semAc(p[1]))){ ini=[p[0],p[1]]; resto=p.slice(2); }
-  else if(p.length>=4 && LIGA[semAc(p[1])] && DEVOC.has(semAc(p[2]))){ ini=[p[0],p[1],p[2]]; resto=p.slice(3); }
+  else if(p.length>=4 && /^(MARIA|ANA)$/.test(semAc(p[0])) && LIGA[semAc(p[1])] && DEVOC.has(semAc(p[2]))){ ini=[p[0],p[1],p[2]]; resto=p.slice(3); }
   // último sobrenome (Filho/Júnior/Neto vão junto)
   let fim=resto.length-1;
   if(fim>0 && SUFX[semAc(resto[fim]).replace(/\./g,'')]) fim--;
@@ -1350,7 +1350,13 @@ function pessoaDaVendedora(l,v){
   // grafia diferente do mesmo nome: "MAYARA" × "Maiara", "THAIZ" × "Thais"
   const vf=vt.map(fonetico);
   const f=ps.filter(x=>{ const pf=tokens(x.nome).map(fonetico); return vf.every(t=>pf.indexOf(t)>=0); });
-  return f.length===1 ? f[0] : null;
+  if(f.length===1) return f[0];
+  if(f.length>1) return null;
+  // apelido que é pedaço do nome: "GLEIDE" × "Regisgleide", "DALVA" × "Dalvanice"
+  // (só com 4 letras ou mais, e só se apontar para uma pessoa)
+  const pedaco=(a,b)=>a.length>=4 && (b.indexOf(a)>=0 || (b.length>=4 && a.indexOf(b)>=0));
+  const g=ps.filter(x=>{ const pf=tokens(x.nome).map(fonetico); return vf.every(t=>pf.some(u=>pedaco(t,u))); });
+  return g.length===1 ? g[0] : null;
 }
 // aproxima grafias do mesmo nome (Y/I, W/V, PH/F, TH/T, K/C, Z/S no fim, letra dobrada, H mudo)
 function fonetico(t){
