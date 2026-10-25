@@ -252,6 +252,9 @@ table.gr td.nm{background:var(--surface-2);font-size:.74rem;font-weight:500;padd
 table.gr td.cel{min-width:104px;padding:3px;background:var(--surface);}
 table.gr td.cel.fer{background:var(--surface-2);}
 table.gr td.cel.fora{background:var(--surface-2);}
+table.gr td.cel.saiu{background:var(--surface-2);text-align:center;}
+table.gr td.cel.saiu span{font-size:11px;font-weight:600;letter-spacing:.08em;color:var(--fer);opacity:.75;}
+table.gr td.cel.saiu b.sg{color:var(--fer);opacity:.6;}
 
 table.gr select.g{width:100%;border:1px solid transparent;background:transparent;color:var(--muted);
   border-radius:7px;padding:8px 3px;font-size:.74rem;font-family:'IBM Plex Mono',ui-monospace,monospace;
@@ -1236,16 +1239,17 @@ function daEscala(l,m){
   const e=ESC[l+'|'+m]||{};
   const tem=n=>{ const d=e[n]; return !!(d && Object.keys(d).some(k=>d[k])); };
   const cad=cadLoja(l).vendedoras;
-  const dentro=cad.filter(v=>tem(v.nome));
+  // quem saiu (data de saída no cadastro de benefícios) antes do mês
+  // começar não está mais na loja: sai da escala sozinha, mesmo que a
+  // escala tenha sido copiada com os dias dela
+  const foi=n=>ultimoDiaEsc(l,m,n)===0;
+  const dentro=cad.filter(v=>tem(v.nome) && !foi(v.nome));
   const validado=(STATUS[l+'|'+m]||{}).situacao==='VALIDADA';
   // Mês validado é retrato: vale quem está nele, inativada ou não, para
   // que inativar alguém hoje não mexa no que já foi fechado e pago.
   // Mês aberto (rascunho, enviada, versão nova) segue o cadastro: quem
   // foi inativada sai da grade e some do mês ao salvar.
-  // quem saiu (data de saída no cadastro de benefícios) antes deste mês não
-  // entra no mês aberto — a não ser que já tenha dia lançado nele
-  const saiuAntes=v=>{ const p=pessoaDaVendedora(l,v); return !!(p && p.saiu && String(p.saiu).slice(0,7)<m) && !tem(v.nome); };
-  const base=(validado && dentro.length) ? dentro : cad.filter(v=>v.ativa!==false && !saiuAntes(v));
+  const base=(validado && dentro.length) ? dentro : cad.filter(v=>v.ativa!==false && !foi(v.nome));
   // nome repetido no cadastro (acontece) não pode virar duas linhas
   const out=[], vistos={};
   base.forEach(v=>{ const k=norm(v.nome); if(!vistos[k]){ vistos[k]=1; out.push(v); } });
@@ -1253,7 +1257,7 @@ function daEscala(l,m){
   // direto) não pode sumir — no mês aberto, só essa gente é resgatada.
   const noCad={}; cad.forEach(v=>{ noCad[norm(v.nome)]=1; });
   Object.keys(e).forEach(n=>{ const k=norm(n);
-    if(vistos[k] || !tem(n)) return;
+    if(vistos[k] || !tem(n) || foi(n)) return;
     if(!validado && noCad[k]) return;
     vistos[k]=1; out.push({nome:n,ativa:false,novo:!!pessoaPorNome(l,n)});
   });
@@ -1418,8 +1422,44 @@ function nomeCheioVer(n,l){
 function diasNoMes(m){ const [a,b]=m.split('-').map(Number); return new Date(a,b,0).getDate(); }
 function dataDe(m,d){ const [a,b]=m.split('-').map(Number); return new Date(a,b-1,d); }
 
-function valor(v,d){ const e=ESC[chave()]; return (e&&e[v]&&e[v][d])||''; }
+// ── SAÍDA
+// A data de saída vem do cadastro de benefícios (Sólides). O dia da saída
+// ainda conta; depois dele a pessoa não está mais na escala: some dos
+// meses seguintes e, no mês em que saiu, os dias depois da saída ficam
+// vazios (não contam na loja, no resumo, no PDF nem no Excel).
+const _saida={};
+function saidaDe(l,n){
+  const ps=pessDe(l); if(!ps.length || !n) return '';
+  const cad=cadLoja(l).vendedoras;
+  const ck=l+'|'+ps.map(p=>p.nome+'~'+(p.saiu||'')).join('§')+'|'+cad.map(v=>v.nome+'~'+(v.solides||'')).join('§');
+  if(!_saida[ck]){ Object.keys(_saida).forEach(k=>{ if(k.split('|')[0]===l) delete _saida[k]; }); _saida[ck]={}; }
+  const t=_saida[ck], k=norm(n);
+  if(!(k in t)){
+    const v=cad.find(x=>norm(x.nome)===k) || {nome:n};
+    const p=pessoaDaVendedora(l,v);
+    t[k]=(p && p.saiu) ? String(p.saiu).slice(0,10) : '';
+  }
+  return t[k];
+}
+// último dia do mês em que a pessoa ainda está na loja:
+// o fim do mês se não saiu, 0 se saiu antes do mês começar
+function ultimoDiaEsc(l,m,n){
+  const nd=diasNoMes(m), s=saidaDe(l,n);
+  if(!/^\d{4}-\d{2}-\d{2}/.test(s)) return nd;
+  const sm=s.slice(0,7);
+  if(sm<m) return 0;
+  if(sm>m) return nd;
+  return Math.min(nd, Number(s.slice(8,10))||nd);
+}
+const depoisDaSaida=(n,d)=>d>ultimoDiaEsc(loja,mes,n);
+function celSaiu(n){
+  const s=saidaDe(loja,n);
+  return 'Saiu em '+s.slice(8,10)+'/'+s.slice(5,7);
+}
+
+function valor(v,d){ if(depoisDaSaida(v,d)) return ''; const e=ESC[chave()]; return (e&&e[v]&&e[v][d])||''; }
 function setValor(v,d,val){
+  if(val && depoisDaSaida(v,d)) return;
   if(!ESC[chave()]) ESC[chave()]={};
   const e=ESC[chave()];
   if(!e[v]) e[v]={};
@@ -1672,6 +1712,7 @@ function renderEscala(){
        (ant&&!BLOQ?'<button class="rep" data-rep="'+d+'" data-de="'+ant+'">repetir</button>':'')+
        '</div>';
     vs.forEach(v=>{
+      if(depoisDaSaida(v.nome,d)) return;
       const val=valor(v.nome,d);
       h+='<div class="ln"><span title="'+esc(nomeCheioVer(v.nome))+'">'+esc(nomeVer(v.nome))+marcaNova(v)+'</span>'+
          '<select class="'+classeDe(loja,val)+'"'+(BLOQ?' disabled':'')+' data-v="'+esc(v.nome)+'" data-d="'+d+'">'+opcoes(val)+'</select></div>';
@@ -1911,6 +1952,7 @@ function htmlGrade(vs){
       h+='<tr><td class="nm" title="'+esc(nomeCheioVer(v.nome))+'">'+esc(nomeVer(v.nome))+marcaNova(v)+'</td>';
       sem.forEach(d=>{
         if(!d.noMes){ h+='<td class="cel fora"><select class="g" disabled><option></option></select></td>'; return; }
+        if(depoisDaSaida(v.nome,d.dia)){ h+='<td class="cel saiu" title="'+esc(celSaiu(v.nome))+'"><span>SAIU</span></td>'; return; }
         const val=valor(v.nome,d.dia);
         h+='<td class="cel'+(FER[d.dia]?' fer':'')+'"><select class="g '+classeDe(loja,val)+'"'+(BLOQ?' disabled':'')+
            (val?' title="'+esc(val)+'"':'')+' data-v="'+esc(v.nome)+'" data-d="'+d.dia+'">'+opcoes(val,'',true)+'</select></td>';
@@ -1956,6 +1998,7 @@ function htmlResumoSig(vs){
       h+='<tr><td class="nm" title="'+esc(nomeCheioVer(v.nome))+'">'+esc(nomeVer(v.nome))+marcaNova(v)+'</td>';
       sem.forEach(d=>{
         if(!d.noMes){ h+='<td class="cel fora"></td>'; return; }
+        if(depoisDaSaida(v.nome,d.dia)){ h+='<td class="cel saiu" title="'+esc(celSaiu(v.nome))+'"><b class="sg">–</b></td>'; return; }
         const val=valor(v.nome,d.dia);
         const cl=classeDe(loja,val), sg=sigDe(loja,val);
         h+='<td class="cel'+(FER[d.dia]?' fer':'')+(ehHoje(d.dia)?' hj':'')+'">'+
@@ -2776,7 +2819,11 @@ function mostrarTela(t){
 
 function linhasParaSalvar(){
   const m=ESC[chave()]||{};
-  return daEscala(loja,mes).map(v=>({vendedora:v.nome,dias:m[v.nome]||{}}));
+  return daEscala(loja,mes).map(v=>{
+    const ds=Object.assign({},m[v.nome]||{});
+    Object.keys(ds).forEach(d=>{ if(depoisDaSaida(v.nome,+d)) delete ds[d]; });   // depois da saída não vai para a planilha
+    return {vendedora:v.nome,dias:ds};
+  });
 }
 
 async function salvar(situacao,porQuem){
