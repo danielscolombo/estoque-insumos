@@ -680,6 +680,7 @@ table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-w
   *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;}
 }
 /* nomes do Sólides */
+.lin.vend .vinc .saiu{color:#9B2C2C;font-weight:600;margin-left:4px;}
 .ln span .nova,td.nm .nova{font-style:normal;font-size:.56rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
   margin-left:6px;padding:1px 5px;border-radius:4px;background:var(--plum-soft);color:var(--plum);white-space:nowrap;}
 .lin.vend{flex-wrap:wrap;}
@@ -1241,7 +1242,10 @@ function daEscala(l,m){
   // que inativar alguém hoje não mexa no que já foi fechado e pago.
   // Mês aberto (rascunho, enviada, versão nova) segue o cadastro: quem
   // foi inativada sai da grade e some do mês ao salvar.
-  const base=(validado && dentro.length) ? dentro : cad.filter(v=>v.ativa!==false);
+  // quem saiu (data de saída no cadastro de benefícios) antes deste mês não
+  // entra no mês aberto — a não ser que já tenha dia lançado nele
+  const saiuAntes=v=>{ const p=pessoaDaVendedora(l,v); return !!(p && p.saiu && String(p.saiu).slice(0,7)<m) && !tem(v.nome); };
+  const base=(validado && dentro.length) ? dentro : cad.filter(v=>v.ativa!==false && !saiuAntes(v));
   // nome repetido no cadastro (acontece) não pode virar duas linhas
   const out=[], vistos={};
   base.forEach(v=>{ const k=norm(v.nome); if(!vistos[k]){ vistos[k]=1; out.push(v); } });
@@ -1337,7 +1341,12 @@ function pessoaPorNome(l,n){
   return null;
 }
 function pessoaDaVendedora(l,v){
-  const ps=pessDe(l); if(!ps.length) return null;
+  const todas=pessDe(l); if(!todas.length) return null;
+  // procura primeiro entre quem está ativo; quem saiu só se não achar
+  return acharPessoa(todas.filter(p=>!p.saiu),v) || acharPessoa(todas.filter(p=>p.saiu),v);
+}
+function acharPessoa(ps,v){
+  if(!ps.length) return null;
   if(v.solides){ const p=ps.find(x=>chaveNm(x.nome)===chaveNm(v.solides)); if(p) return p; }
   const k=chaveNm(v.nome);
   let p=ps.find(x=>chaveNm(x.nome)===k) || ps.find(x=>x.escala && chaveNm(x.escala)===k);
@@ -1365,7 +1374,7 @@ function fonetico(t){
 }
 // quem do Sólides não corresponde a ninguém do cadastro da escala
 function novasDoSolides(l){
-  const ps=pessDe(l); if(!ps.length) return [];
+  const ps=pessDe(l).filter(p=>!p.saiu); if(!ps.length) return [];
   const usados={};
   cadLoja(l).vendedoras.forEach(v=>{ const p=pessoaDaVendedora(l,v); if(p) usados[chaveNm(p.nome)]=1; });
   return ps.filter(p=>!usados[chaveNm(p.nome)]);
@@ -2687,7 +2696,8 @@ function renderCadastro(){
     if(!temPess) return '';
     const p=pessoaDaVendedora(loja,v);
     if(p) return '<div class="vinc ok" title="Nome do contrato (Sólides / benefícios)">'+esc(p.nome)+
-      ' <span>· aparece como <b>'+esc(nomeVer(v.nome))+'</b></span></div>';
+      ' <span>· aparece como <b>'+esc(nomeVer(v.nome))+'</b></span>'+
+      (p.saiu?' <b class="saiu">saiu em '+esc(String(p.saiu).slice(8,10)+'/'+String(p.saiu).slice(5,7))+' — não entra nos meses seguintes</b>':'')+'</div>';
     return '<div class="vinc"><span>Não achei no Sólides.</span> <select class="fld vsel" data-vinc="'+i+'"><option value="">É a mesma que…</option>'+
       novas.map(x=>'<option value="'+esc(x.nome)+'">'+esc(x.nome)+'</option>').join('')+'</select></div>';
   };
