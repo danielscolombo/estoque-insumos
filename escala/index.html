@@ -542,7 +542,7 @@ table.t tr.tot td{background:var(--surface-2);font-weight:600;color:var(--ink);}
   text-transform:uppercase;color:var(--plum);background:var(--plum-soft);border-radius:6px;
   padding:3px 9px;margin-left:2px;}
 .vlist{display:flex;flex-direction:column;gap:9px;}
-.vit{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface);
+.vit{flex:none;border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--surface);
   display:flex;flex-direction:column;gap:6px;}
 .vit.agora{border-color:var(--plum);background:var(--plum-soft);}
 .vtop{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
@@ -562,7 +562,7 @@ table.t tr.tot td{background:var(--surface-2);font-weight:600;color:var(--ink);}
 /* diferenças entre duas versões */
 .dlist{display:flex;flex-direction:column;gap:10px;max-height:46vh;overflow-y:auto;
   padding-right:2px;}
-.dit{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);}
+.dit{flex:none;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);}
 .dnm{padding:9px 13px;background:var(--surface-2);border-bottom:1px solid var(--line);
   font-size:.83rem;font-weight:600;color:var(--ink);display:flex;align-items:center;gap:8px;
   flex-wrap:wrap;}
@@ -1174,7 +1174,8 @@ const CIDADE_LOJA={
   'TUCURUVI':'SP','BOM RETIRO':'SP','PENHA':'SP','MOOCA':'SP','LAPA':'SP',
   'MAUÁ':'MAUA','MAUA':'MAUA',
   'SBC':'SBC',
-  'SCS':'SCS','SÃO CAETANO CENTRO':'SCS','SAO CAETANO CENTRO':'SCS'
+  'SCS':'SCS','SÃO CAETANO CENTRO':'SCS','SAO CAETANO CENTRO':'SCS',
+  'IGUATEMI CAMPINAS':'CAMPINAS','IGUATEMI':'CAMPINAS'
 };
 
 function pascoa(a){                       // Meeus/Jones/Butcher
@@ -1214,6 +1215,10 @@ function feriadosDoMes(ano,mesN,lojaNome){
   if(cid==='SBC')  put(dia(8,20),'Aniversário de São Bernardo do Campo');
   if(cid==='SCS')  put(dia(7,28),'Aniversário de São Caetano do Sul');
   if(cid==='MAUA') put(dia(12,8),'Aniversário de Mauá');
+  if(cid==='CAMPINAS'){                    // loja nova (nov/2026) — DJE/SP 25/11/2025
+    const cc=new Date(p); cc.setDate(p.getDate()+60); put(cc,'Corpus Christi');
+    put(dia(12,8),'N. Sra. da Conceição');
+  }
 
   return map;
 }
