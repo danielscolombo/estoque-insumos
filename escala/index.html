@@ -1117,6 +1117,10 @@ const rot=t=>t.entrada+' - '+t.saida;
 // formato AAAA-MM: o horário só é oferecido nos meses em que vale, mas
 // continua reconhecido nos meses antigos, que não mudam.
 const MES_5X2='2026-12';
+// a 5x2 vale a partir da 2ª semana de dezembro (domingo 06/12); a 1ª semana
+// (29/11 a 05/12) ainda é conferida pelo modelo antigo (6x1, 44h, 8h por dia)
+const DIA_5X2='2026-12-06';
+const novaRegra=(m,d)=>(String(m)+'-'+pad(d))>=DIA_5X2;
 // código da loja — só aparece na tela; a chave gravada continua o nome
 const COD_LOJA={'TUCURUVI':'124','BOM RETIRO':'125','PENHA':'126','MOOCA':'127','MAUÁ':'133','MAUA':'133',
   'LAPA':'138','SÃO CAETANO CENTRO':'149','SAO CAETANO CENTRO':'149','SBC':'210','IGUATEMI CAMPINAS':'225','SCS':'527'};
@@ -1691,11 +1695,13 @@ function opcoes(sel,vazio,curto){
   const c=cadLoja(loja);
   const tx=s=>esc(curto?curtoRot(s):s);
   let h='<option value="">'+(vazio===undefined?'—':vazio)+'</option>';
-  const tv=c.turnos.filter(t=>turnoVale(t)||rot(t)===sel);
+  const ant1=mes===MES_5X2;                 // dezembro: 1ª semana ainda no modelo antigo
+  const velho=t=>ant1 && !turnoVale(t) && turnoVale(t,mesMenos(mes));
+  const tv=c.turnos.filter(t=>turnoVale(t)||velho(t)||rot(t)===sel);
   if(tv.length){
     h+='<optgroup label="Horários">';
     tv.forEach(t=>{const r=rot(t), fora=!turnoVale(t);
-      h+='<option value="'+esc(r)+'"'+(sel===r?' selected':'')+'>'+tx(r)+(fora?' (inativo)':'')+'</option>';});
+      h+='<option value="'+esc(r)+'"'+(sel===r?' selected':'')+'>'+tx(r)+(velho(t)?' (só até 05/12)':(fora?' (inativo)':''))+'</option>';});
     h+='</optgroup>';
   }
   if(c.ausencias.length){
@@ -2159,7 +2165,7 @@ function conferirEscala(){
       // regra geral: domingo sim, domingo não (nunca dois seguidos).
       // Conta desde o fim do mês anterior.
       const lim=2;
-      const ds=S.map((x,i)=>Object.assign({i:i},x)).filter(x=>dataDe(x.m,x.d).getDay()===0);
+      const ds=S.map((x,i)=>Object.assign({i:i},x)).filter(x=>dataDe(x.m,x.d).getDay()===0 && novaRegra(x.m,x.d));
       let run=[];
       ds.forEach(x=>{
         const t=trabalha(loja,x.v)||!!faixaHoraria(x.v);
@@ -2186,23 +2192,25 @@ function conferirEscala(){
           'Lei 10.101/2000 art. 6º-A');
 
     // jornada diária
-    const longos=[], extras=[];
-    let maiorL=0, maiorE=0;
+    const longos=[], extras=[], extrasN=[];
+    let maiorL=0, maiorE=0, maiorN=0;
     for(let d=1;d<=nd;d++){
       const f=faixaHoraria(dia(d)); if(!f) continue;
       const hs=f.liq/60;
-      const lim=regras5x2(mes)?REGRA5.horasDia:REGRA.horasDia;
+      const nv=regras5x2(mes) && novaRegra(mes,d);
+      const lim=nv?REGRA5.horasDia:REGRA.horasDia;
       if(hs>REGRA.horasDiaGrave){ longos.push(d); maiorL=Math.max(maiorL,f.liq); }
-      else if(hs>lim+1e-9){ extras.push(d); maiorE=Math.max(maiorE,f.liq); }
+      else if(hs>lim+1e-9){ if(nv){ extrasN.push(d); maiorN=Math.max(maiorN,f.liq); } else { extras.push(d); maiorE=Math.max(maiorE,f.liq); } }
     }
     if(longos.length)
       add('grave','jornada',n,longos.length+' dia(s) passando de 10h de trabalho (maior: '+hhmm(maiorL)+
           '). '+listaDias(longos),'CLT art. 59 — no máximo 2 horas extras por dia');
     if(extras.length)
-      add('atencao','jornada',n,regras5x2(mes)
-            ? extras.length+' dia(s) acima de 8h24 (maior: '+hhmm(maiorE)+', '+hhmm(maiorE-504)+' de extra). '+listaDias(extras)
-            : extras.length+' dia(s) acima de 8h (maior: '+hhmm(maiorE)+', '+hhmm(maiorE-480)+' de extra). '+listaDias(extras),
-          regras5x2(mes)?'EC 141/2026 — 42h em 5 dias (8h24 por dia)':'CF art. 7º XIII — 8h por dia');
+      add('atencao','jornada',n,extras.length+' dia(s) acima de 8h (maior: '+hhmm(maiorE)+', '+hhmm(maiorE-480)+' de extra). '+listaDias(extras),
+          'CF art. 7º XIII — 8h por dia');
+    if(extrasN.length)
+      add('atencao','jornada',n,extrasN.length+' dia(s) acima de 8h24 (maior: '+hhmm(maiorN)+', '+hhmm(maiorN-504)+' de extra). '+listaDias(extrasN),
+          'EC 141/2026 — 42h em 5 dias (8h24 por dia)');
 
     // horário que não vale neste mês (ex.: copiado de novembro) ou fora do cadastro
     if(regras5x2(mes)){
@@ -2210,11 +2218,12 @@ function conferirEscala(){
       for(let d=1;d<=nd;d++){
         const v=dia(d); if(!faixaHoraria(v)) continue;
         const t=c.turnos.find(x=>rot(x)===v);
-        if(!t || !turnoVale(t)) (fora[v]=fora[v]||[]).push(d);
+        const ok=t && (turnoVale(t) || (!novaRegra(mes,d) && turnoVale(t,mesMenos(mes))));
+        if(!ok) (fora[v]=fora[v]||[]).push(d);
       }
       Object.keys(fora).forEach(v=>{
         const t=c.turnos.find(x=>rot(x)===v);
-        add('grave','horario',n,'Horário '+v+(t?' está inativo em '+rotMes(mes):' não está no cadastro')+'. '+listaDias(fora[v]),
+        add('grave','horario',n,'Horário '+v+(t?' está inativo '+(mes===MES_5X2?'a partir de 06/12':'em '+rotMes(mes)):' não está no cadastro')+'. '+listaDias(fora[v]),
             'Horários definidos para a escala 5x2');
       });
     }
@@ -2258,29 +2267,39 @@ function conferirEscala(){
     return '';
   };
   if(regras5x2(mes)){
-    // semana de segunda a domingo; a que começa no mês anterior soma os
+    // semana de domingo a sábado (a mesma da grade); a que começa no mês anterior soma os
     // dias de lá; a que avança para o mês seguinte confere o que já existe
     const [aa,mm]=mes.split('-').map(Number);
     const prim=new Date(aa,mm-1,1), ult=new Date(aa,mm-1,nd);
-    const ini=new Date(aa,mm-1,1-((prim.getDay()+6)%7));
+    const ini=new Date(aa,mm-1,1-prim.getDay());
     const ym=d=>d.getFullYear()+'-'+pad(d.getMonth()+1);
-    const p42={}, p52={};
+    const p42={}, p52={}, p44={}, p48={};
     for(;ini<=ult;ini.setDate(ini.getDate()+7)){
       const lst=[]; for(let i=0;i<7;i++){ const d=new Date(ini); d.setDate(ini.getDate()+i); lst.push({m:ym(d),dia:d.getDate()}); }
       const vale=lst.filter(x=>x.m===mes || (x.m===am && temAnt));
       const rs=pad(lst[0].dia)+'/'+lst[0].m.slice(5)+' a '+pad(lst[6].dia)+'/'+lst[6].m.slice(5);
+      const nova=novaRegra(lst[0].m,lst[0].dia);     // semana começa em 06/12 ou depois
       vs.forEach(v=>{
         let tot=0, nt=0;
         vale.forEach(x=>{ const val=valorEm(v.nome,x), f=faixaHoraria(val);
           if(f||trabalha(loja,val)){ nt++; if(f) tot+=f.liq; } });
+        if(!nova){                                 // modelo antigo: 44h (48h com extras)
+          if(tot>REGRA.horasSemanaGrave*60) (p48[v.nome]=p48[v.nome]||[]).push(rs+' ('+hhmm(tot)+')');
+          else if(tot>REGRA.horasSemana*60) (p44[v.nome]=p44[v.nome]||[]).push(rs+' ('+hhmm(tot)+')');
+          return;
+        }
         if(tot>REGRA5.horasSemana*60+0.5) (p42[v.nome]=p42[v.nome]||[]).push(rs+' ('+hhmm(tot)+')');
         if(nt>REGRA5.diasSemana) (p52[v.nome]=p52[v.nome]||[]).push(rs+' ('+nt+' dias)');
       });
     }
+    Object.keys(p48).forEach(n=>achados.push({nivel:'grave',regra:'semana',pessoa:n,
+      texto:'Semana acima de 48h (ainda no modelo antigo): '+p48[n].join('; ')+'.',base:'CF art. 7º XIII + CLT art. 59'}));
+    Object.keys(p44).forEach(n=>achados.push({nivel:'atencao',regra:'semana',pessoa:n,
+      texto:'Semana acima das 44h (ainda no modelo antigo): '+p44[n].join('; ')+'.',base:'CF art. 7º XIII — 44h semanais'}));
     Object.keys(p42).forEach(n=>achados.push({nivel:'grave',regra:'semana',pessoa:n,
       texto:'Semana(s) acima de 42h: '+p42[n].join('; ')+'.',base:'EC 141/2026 — no máximo 42h por semana'}));
     Object.keys(p52).forEach(n=>achados.push({nivel:'grave',regra:'escala5x2',pessoa:n,
-      texto:'Mais de 5 dias de trabalho na semana: '+p52[n].join('; ')+'. Na 5x2 são 2 folgas por semana (segunda a domingo).',
+      texto:'Mais de 5 dias de trabalho na semana: '+p52[n].join('; ')+'. Na 5x2 são 2 folgas por semana (domingo a sábado).',
       base:'EC 141/2026 — escala 5x2, dois dias de descanso por semana'}));
   }
   if(!regras5x2(mes)) semanasDoMes().forEach((sem,si)=>{
