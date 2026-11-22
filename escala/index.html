@@ -696,6 +696,10 @@ table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-w
 .lin.nova{display:flex;align-items:center;gap:8px;margin:6px 0;}
 .lin.nova .nm{flex:1;min-width:0;font-size:.82rem;}
 .lin.nova .nm small{color:var(--muted,#6B5B66);}
+#boxTur .vale{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted,#7a6f74);}
+#boxTur .mesv{width:170px;}
+#boxTur .inat{font-size:11px;font-weight:600;color:#9a2c4a;background:#f6e3ea;border-radius:6px;padding:2px 6px;}
+#boxHom .lin.hom{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 </style>
 </head>
 <body>
@@ -1105,6 +1109,24 @@ function cadLoja(l){
   return c;
 }
 const rot=t=>t.entrada+' - '+t.saida;
+
+// ── 5x2 (EC 141/2026) — Daniel 22/11/2026
+// A partir de dezembro/2026 as escalas seguem a 5x2: no máximo 42h por
+// semana, 2 folgas por semana e domingos alternados para as mulheres.
+// Novembro e os meses anteriores continuam com as regras de antes.
+// Cada horário do cadastro pode ter "vale de" (desde) e "até" (ate), no
+// formato AAAA-MM: o horário só é oferecido nos meses em que vale, mas
+// continua reconhecido nos meses antigos, que não mudam.
+const MES_5X2='2026-12';
+const regras5x2=m=>String(m||mes)>=MES_5X2;
+const turnoVale=(t,m)=>{ m=String(m||mes); return (!t.desde||m>=t.desde) && (!t.ate||m<=t.ate); };
+// homens não precisam alternar domingo (CLT art. 386 é para mulheres);
+// para eles vale a Lei 10.101: um domingo de folga a cada 3 semanas
+function ehHomem(l,nome){
+  const H=(cadLoja(l||loja).homens)||[]; if(!H.length) return false;
+  const k=chaveNm(nome), p=tokens(nome)[0]||'';
+  return H.some(h=>{ const th=tokens(h); return chaveNm(h)===k || (th.length===1 && th[0]===p); });
+}
 
 // ── SIGLAS
 // Na vista Resumo cada horário vira uma letra, para a semana inteira
@@ -1665,9 +1687,11 @@ function opcoes(sel,vazio,curto){
   const c=cadLoja(loja);
   const tx=s=>esc(curto?curtoRot(s):s);
   let h='<option value="">'+(vazio===undefined?'—':vazio)+'</option>';
-  if(c.turnos.length){
+  const tv=c.turnos.filter(t=>turnoVale(t)||rot(t)===sel);
+  if(tv.length){
     h+='<optgroup label="Horários">';
-    c.turnos.forEach(t=>{const r=rot(t);h+='<option value="'+esc(r)+'"'+(sel===r?' selected':'')+'>'+tx(r)+'</option>';});
+    tv.forEach(t=>{const r=rot(t), fora=!turnoVale(t);
+      h+='<option value="'+esc(r)+'"'+(sel===r?' selected':'')+'>'+tx(r)+(fora?' (inativo)':'')+'</option>';});
     h+='</optgroup>';
   }
   if(c.ausencias.length){
@@ -2052,7 +2076,8 @@ const REGRA={
   domingosSeguidos:2,  // política da casa
   domingoFolgaEmCada:3 // Lei 10.101: um domingo de folga a cada 3
 };
-const ROT_REGRA={descanso:'Descanso semanal',domingo:'Domingos',jornada:'Jornada diária',
+const REGRA5={horasSemana:42, diasSemana:5, horasDia:8.4};
+const ROT_REGRA={escala5x2:'Escala 5x2',horario:'Horários do cadastro',descanso:'Descanso semanal',domingo:'Domingos',jornada:'Jornada diária',
   interjornada:'Interjornada',semana:'Jornada semanal',cobertura:'Cobertura'};
 
 // "09:00 - 17:20" -> {ini:540, fim:1040, liq:440}
@@ -2126,8 +2151,27 @@ function conferirEscala(){
     // domingos
     const doms=[]; for(let d=1;d<=nd;d++) if(dataDe(mes,d).getDay()===0) doms.push(d);
     const domTrab=doms.filter(trab);
+    if(regras5x2(mes)){
+      // mulher: domingos alternados (nunca dois seguidos); homem: no máximo
+      // 2 seguidos (Lei 10.101). Conta desde o fim do mês anterior.
+      const hm=ehHomem(loja,n), lim=hm?3:2;
+      const ds=S.map((x,i)=>Object.assign({i:i},x)).filter(x=>dataDe(x.m,x.d).getDay()===0);
+      let run=[];
+      ds.forEach(x=>{
+        const t=trabalha(loja,x.v)||!!faixaHoraria(x.v);
+        if(!t){ run=[]; return; }
+        run.push(x);
+        if(run.length===lim && x.i>=base0)
+          add('grave','domingo',n,(hm?lim+' domingos seguidos':'Domingos seguidos')+' ('+run.map(dm).join(', ')+')'+
+              (hm?' — homem pode no máximo 2 seguidos.':' — mulheres alternam: trabalha um domingo e folga o seguinte.')+
+              (run[0].m===am?' A conta vem de '+rotMes(am)+'.':''),
+              hm?'Lei 10.101/2000 art. 6º — 1 domingo de folga a cada 3 semanas'
+                :'CLT art. 386 + regra da casa — domingos alternados para mulheres');
+        if(run.length>=lim) run=[run[run.length-1]];
+      });
+    }
     let seq=1;
-    for(let i=1;i<doms.length;i++){
+    for(let i=1;i<doms.length && !regras5x2(mes);i++){
       const at=trab(doms[i]), an=trab(doms[i-1]);
       if(at&&an){ seq++;
         if(seq===REGRA.domingosSeguidos)
@@ -2145,15 +2189,33 @@ function conferirEscala(){
     for(let d=1;d<=nd;d++){
       const f=faixaHoraria(dia(d)); if(!f) continue;
       const hs=f.liq/60;
+      const lim=regras5x2(mes)?REGRA5.horasDia:REGRA.horasDia;
       if(hs>REGRA.horasDiaGrave){ longos.push(d); maiorL=Math.max(maiorL,f.liq); }
-      else if(hs>REGRA.horasDia){ extras.push(d); maiorE=Math.max(maiorE,f.liq); }
+      else if(hs>lim+1e-9){ extras.push(d); maiorE=Math.max(maiorE,f.liq); }
     }
     if(longos.length)
       add('grave','jornada',n,longos.length+' dia(s) passando de 10h de trabalho (maior: '+hhmm(maiorL)+
           '). '+listaDias(longos),'CLT art. 59 — no máximo 2 horas extras por dia');
     if(extras.length)
-      add('atencao','jornada',n,extras.length+' dia(s) acima de 8h (maior: '+hhmm(maiorE)+', '+
-          hhmm(maiorE-480)+' de extra). '+listaDias(extras),'CF art. 7º XIII — 8h por dia');
+      add('atencao','jornada',n,regras5x2(mes)
+            ? extras.length+' dia(s) acima de 8h24 (maior: '+hhmm(maiorE)+', '+hhmm(maiorE-504)+' de extra). '+listaDias(extras)
+            : extras.length+' dia(s) acima de 8h (maior: '+hhmm(maiorE)+', '+hhmm(maiorE-480)+' de extra). '+listaDias(extras),
+          regras5x2(mes)?'EC 141/2026 — 42h em 5 dias (8h24 por dia)':'CF art. 7º XIII — 8h por dia');
+
+    // horário que não vale neste mês (ex.: copiado de novembro) ou fora do cadastro
+    if(regras5x2(mes)){
+      const c=cadLoja(loja), fora={};
+      for(let d=1;d<=nd;d++){
+        const v=dia(d); if(!faixaHoraria(v)) continue;
+        const t=c.turnos.find(x=>rot(x)===v);
+        if(!t || !turnoVale(t)) (fora[v]=fora[v]||[]).push(d);
+      }
+      Object.keys(fora).forEach(v=>{
+        const t=c.turnos.find(x=>rot(x)===v);
+        add('grave','horario',n,'Horário '+v+(t?' está inativo em '+rotMes(mes):' não está no cadastro')+'. '+listaDias(fora[v]),
+            'Horários definidos para a escala 5x2');
+      });
+    }
 
     // 11h entre jornadas — inclusive a emenda do último dia do mês
     // anterior com o dia 1 deste.
@@ -2193,7 +2255,33 @@ function conferirEscala(){
     if(x.m===am){ const dA=diasAnteriores(loja,mes,nome); return (dA&&dA[x.dia])||''; }
     return '';
   };
-  semanasDoMes().forEach((sem,si)=>{
+  if(regras5x2(mes)){
+    // semana de segunda a domingo; a que começa no mês anterior soma os
+    // dias de lá; a que avança para o mês seguinte confere o que já existe
+    const [aa,mm]=mes.split('-').map(Number);
+    const prim=new Date(aa,mm-1,1), ult=new Date(aa,mm-1,nd);
+    const ini=new Date(aa,mm-1,1-((prim.getDay()+6)%7));
+    const ym=d=>d.getFullYear()+'-'+pad(d.getMonth()+1);
+    const p42={}, p52={};
+    for(;ini<=ult;ini.setDate(ini.getDate()+7)){
+      const lst=[]; for(let i=0;i<7;i++){ const d=new Date(ini); d.setDate(ini.getDate()+i); lst.push({m:ym(d),dia:d.getDate()}); }
+      const vale=lst.filter(x=>x.m===mes || (x.m===am && temAnt));
+      const rs=pad(lst[0].dia)+'/'+lst[0].m.slice(5)+' a '+pad(lst[6].dia)+'/'+lst[6].m.slice(5);
+      vs.forEach(v=>{
+        let tot=0, nt=0;
+        vale.forEach(x=>{ const val=valorEm(v.nome,x), f=faixaHoraria(val);
+          if(f||trabalha(loja,val)){ nt++; if(f) tot+=f.liq; } });
+        if(tot>REGRA5.horasSemana*60+0.5) (p42[v.nome]=p42[v.nome]||[]).push(rs+' ('+hhmm(tot)+')');
+        if(nt>REGRA5.diasSemana) (p52[v.nome]=p52[v.nome]||[]).push(rs+' ('+nt+' dias)');
+      });
+    }
+    Object.keys(p42).forEach(n=>achados.push({nivel:'grave',regra:'semana',pessoa:n,
+      texto:'Semana(s) acima de 42h: '+p42[n].join('; ')+'.',base:'EC 141/2026 — no máximo 42h por semana'}));
+    Object.keys(p52).forEach(n=>achados.push({nivel:'grave',regra:'escala5x2',pessoa:n,
+      texto:'Mais de 5 dias de trabalho na semana: '+p52[n].join('; ')+'. Na 5x2 são 2 folgas por semana (segunda a domingo).',
+      base:'EC 141/2026 — escala 5x2, dois dias de descanso por semana'}));
+  }
+  if(!regras5x2(mes)) semanasDoMes().forEach((sem,si)=>{
     const dias=resolver(sem);
     const temProx=dias.some(x=>x.m===prox);
     const temPassado=dias.some(x=>x.m===am);
@@ -2250,9 +2338,12 @@ function htmlApontamentos(r){
       ', então a virada do mês não foi conferida: a sequência de dias e a primeira semana '+
       'começam do zero no dia 1. Abra o mês anterior uma vez e volte aqui.</p>'
     : '<p class="pat">A conta puxa o fim de '+esc(rotMes(r._mesAnterior||''))+
-      ': dias seguidos, 44h da primeira semana e o descanso entre o último dia daquele mês '+
+      ': dias seguidos, '+(regras5x2(mes)?'42h e folgas':'44h')+' da primeira semana, domingos e o descanso entre o último dia daquele mês '+
       'e o dia 1 deste entram na conferência.</p>';
   const nota=fim+virada;
+  if(!r.length && regras5x2(mes))
+    return '<div class="confOk">✓ <b>Nenhuma regra quebrada.</b> Escala 5x2 (2 folgas por semana), 42h por semana, '+
+           '8h24 por dia, domingos alternados para mulheres, horários do cadastro, 11h entre jornadas e cobertura — tudo dentro.</div>'+nota;
   if(!r.length)
     return '<div class="confOk">✓ <b>Nenhuma regra quebrada.</b> Descanso semanal, domingos, 44h por semana, '+
            '8h por dia, 11h entre jornadas e cobertura — tudo dentro.</div>'+nota;
@@ -2687,7 +2778,7 @@ function renderLegenda(){
   const c=cadLoja(loja);
   // as cores do dicionário são as mesmas das células — CSS, não estilo aqui
   const chip=(sg,txt,cl)=>'<span class="lg '+cl+'"><u>'+esc(sg)+'</u>'+esc(txt)+'</span>';
-  let h=c.turnos.map(t=>chip(norm(t.sigla), rot(t), TIPOS.indexOf(norm(t.tipo))>=0?norm(t.tipo):'INTERMEDIARIO')).join('')+
+  let h=c.turnos.filter(t=>turnoVale(t)).map(t=>chip(norm(t.sigla), rot(t), TIPOS.indexOf(norm(t.tipo))>=0?norm(t.tipo):'INTERMEDIARIO')).join('')+
         c.ausencias.map(a=>chip(norm(a.sigla), a.rotulo, norm(a.tipo)==='FOLGA'?'FOLGA':'AUSENCIA')).join('');
   $('#legenda').innerHTML=h;
 }
@@ -2735,6 +2826,7 @@ function renderCadastro(){
     '<div class="card"><h3>Vendedoras<span>'+esc(loja)+'</span></h3><div class="in" id="boxVend"></div></div>'+
     '<div class="card"><h3>Horários<span>'+esc(loja)+'</span></h3><div class="in" id="boxTur"></div></div>'+
     '<div class="card"><h3>Folgas e ausências<span>'+esc(loja)+'</span></h3><div class="in" id="boxAus"></div></div>'+
+    '<div class="card"><h3>Domingos<span>'+esc(loja)+'</span></h3><div class="in" id="boxHom"></div></div>'+
     '<div class="card"><h3>Lojas</h3><div class="in" id="boxLoja"></div></div>'+
     '<div class="acoes-fim"><button class="bt" id="btSalvarCad">Salvar cadastro</button></div>';
 
@@ -2771,6 +2863,9 @@ function renderCadastro(){
     '<input class="fld hora" type="time" data-c="saida" value="'+esc(t.saida)+'">'+
     '<select class="fld tp" data-c="tipo">'+TIPOS.map(x=>'<option value="'+x+'"'+(norm(t.tipo)===x?' selected':'')+'>'+ROT_TIPO[x]+'</option>').join('')+'</select>'+
     '<input class="fld sig" data-c="sigla" maxlength="3" placeholder="sigla" title="Sigla na vista Resumo" value="'+esc(norm(t.sigla))+'">'+
+    '<label class="vale" title="Primeiro mês em que o horário vale (vazio = sempre)">de <input class="fld mesv" type="month" data-c="desde" value="'+esc(t.desde||'')+'"></label>'+
+    '<label class="vale" title="Último mês em que o horário vale (vazio = sem fim)">até <input class="fld mesv" type="month" data-c="ate" value="'+esc(t.ate||'')+'"></label>'+
+    (turnoVale(t)?'':'<span class="inat">inativo em '+esc(rotMes(mes))+'</span>')+
     '<button class="del" data-x="tur">×</button></div>').join('')+
     '<div class="addr"><button class="bt q" id="btAddTur">Adicionar horário</button></div>';
 
@@ -2781,6 +2876,16 @@ function renderCadastro(){
     '<input class="fld sig" data-c="sigla" maxlength="3" placeholder="sigla" title="Sigla na vista Resumo" value="'+esc(norm(a.sigla))+'">'+
     '<button class="del" data-x="aus">×</button></div>').join('')+
     '<div class="addr"><button class="bt q" id="btAddAus">Adicionar</button></div>';
+
+  // a partir de dez/2026 as mulheres alternam domingos; aqui se marca quem é homem
+  const H=c.homens||[], gente=[], vistos={};
+  daEscala(loja,mes).concat(c.vendedoras.filter(v=>v.ativa!==false)).forEach(v=>{
+    const k=chaveNm(v.nome); if(vistos[k]) return; vistos[k]=1; gente.push(v.nome); });
+  $('#boxHom').innerHTML='<p class="dica">Desde dezembro/2026 a conferência não deixa <b>mulher</b> trabalhar dois domingos seguidos. '+
+    'Marque quem é <b>homem</b>: para eles vale a regra da lei, um domingo de folga a cada 3 semanas.</p>'+
+    gente.map(n=>{ const hm=ehHomem(loja,n);
+      return '<div class="lin hom"><span class="nm">'+esc(nomeVer(n))+'</span>'+
+        '<button class="tog'+(hm?' on':'')+'" data-hom="'+esc(n)+'">'+(hm?'Homem':'Mulher')+'</button></div>'; }).join('');
 
   $('#boxLoja').innerHTML=LOJAS.map((l,i)=>
     '<div class="lin" data-i="'+i+'"><input class="fld" data-c="loja" value="'+esc(l)+'">'+
@@ -3112,6 +3217,13 @@ async function init(){
       $('#selLoja').innerHTML=LOJAS.map(l=>'<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+esc(l)+'</option>').join('');
       toast('Cadastro salvo'); renderEscala(); return;
     }
+    const hb=b.closest('[data-hom]');
+    if(hb){ const n=hb.dataset.hom, k=chaveNm(n);
+      const H=(c.homens=c.homens||[]);
+      if(ehHomem(loja,n)){ const p=tokens(n)[0]||'';
+        c.homens=H.filter(h=>{ const th=tokens(h); return !(chaveNm(h)===k || (th.length===1 && th[0]===p)); }); }
+      else H.push(n);
+      renderCadastro(); toast('Marcado — clique em Salvar cadastro'); return; }
     const tog=b.closest('[data-c="ativa"]');
     if(tog){ const i=+tog.closest('.lin').dataset.i; c.vendedoras[i].ativa=c.vendedoras[i].ativa===false; renderCadastro(); return; }
     const del=b.closest('[data-x]');
@@ -3142,7 +3254,8 @@ async function init(){
     }
     if(campo==='loja'){ LOJAS[i]=e.target.value; return; }
     if(lin.parentElement.id==='boxVend') c.vendedoras[i][campo]=e.target.value;
-    else if(lin.parentElement.id==='boxTur') c.turnos[i][campo]=e.target.value;
+    else if(lin.parentElement.id==='boxTur'){ c.turnos[i][campo]=e.target.value;
+      if(campo==='desde'||campo==='ate'){ clearTimeout(window._tRC); window._tRC=setTimeout(renderCadastro,600); } }
     else if(lin.parentElement.id==='boxAus') c.ausencias[i][campo]=e.target.value;
   });
   $('#cadCorpo').addEventListener('change',e=>{
