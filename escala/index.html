@@ -699,7 +699,6 @@ table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-w
 #boxTur .vale{display:inline-flex;align-items:center;gap:4px;font-size:12px;color:var(--muted,#7a6f74);}
 #boxTur .mesv{width:170px;}
 #boxTur .inat{font-size:11px;font-weight:600;color:#9a2c4a;background:#f6e3ea;border-radius:6px;padding:2px 6px;}
-#boxHom .lin.hom{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 </style>
 </head>
 <body>
@@ -1112,21 +1111,26 @@ const rot=t=>t.entrada+' - '+t.saida;
 
 // ── 5x2 (EC 141/2026) — Daniel 22/11/2026
 // A partir de dezembro/2026 as escalas seguem a 5x2: no máximo 42h por
-// semana, 2 folgas por semana e domingos alternados para as mulheres.
+// semana, 2 folgas por semana e domingos alternados (domingo sim, domingo não).
 // Novembro e os meses anteriores continuam com as regras de antes.
 // Cada horário do cadastro pode ter "vale de" (desde) e "até" (ate), no
 // formato AAAA-MM: o horário só é oferecido nos meses em que vale, mas
 // continua reconhecido nos meses antigos, que não mudam.
 const MES_5X2='2026-12';
+// código da loja — só aparece na tela; a chave gravada continua o nome
+const COD_LOJA={'TUCURUVI':'124','BOM RETIRO':'125','PENHA':'126','MOOCA':'127','MAUÁ':'133','MAUA':'133',
+  'LAPA':'138','SÃO CAETANO CENTRO':'149','SAO CAETANO CENTRO':'149','SBC':'210','IGUATEMI CAMPINAS':'225','SCS':'527'};
+const codLoja=l=>COD_LOJA[norm(l)]||'';
+const rotLoja=l=>{ const c=codLoja(l); return c?c+' - '+l:l; };
+function ordLojas(){
+  LOJAS.sort((a,b)=>{ const ca=+codLoja(a)||9999, cb=+codLoja(b)||9999; return ca-cb || String(a).localeCompare(String(b),'pt'); });
+}
+function opcoesLojas(){
+  ordLojas();
+  return LOJAS.map(l=>'<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+esc(rotLoja(l))+'</option>').join('');
+}
 const regras5x2=m=>String(m||mes)>=MES_5X2;
 const turnoVale=(t,m)=>{ m=String(m||mes); return (!t.desde||m>=t.desde) && (!t.ate||m<=t.ate); };
-// homens não precisam alternar domingo (CLT art. 386 é para mulheres);
-// para eles vale a Lei 10.101: um domingo de folga a cada 3 semanas
-function ehHomem(l,nome){
-  const H=(cadLoja(l||loja).homens)||[]; if(!H.length) return false;
-  const k=chaveNm(nome), p=tokens(nome)[0]||'';
-  return H.some(h=>{ const th=tokens(h); return chaveNm(h)===k || (th.length===1 && th[0]===p); });
-}
 
 // ── SIGLAS
 // Na vista Resumo cada horário vira uma letra, para a semana inteira
@@ -1705,7 +1709,7 @@ function opcoes(sel,vazio,curto){
 function renderEscala(){
   const [ano,mm]=mes.split('-').map(Number);
   $('#mesRot').innerHTML=esc(MESES[mm-1].slice(0,3))+'<small>'+ano+'</small>';
-  $('#hdrSub').textContent=(loja||'—')+' · '+MESES[mm-1].toLowerCase()+' '+ano;
+  $('#hdrSub').textContent=(loja?rotLoja(loja):'—')+' · '+MESES[mm-1].toLowerCase()+' '+ano;
   renderSit();
 
   const vs=daEscala(loja,mes);
@@ -2152,9 +2156,9 @@ function conferirEscala(){
     const doms=[]; for(let d=1;d<=nd;d++) if(dataDe(mes,d).getDay()===0) doms.push(d);
     const domTrab=doms.filter(trab);
     if(regras5x2(mes)){
-      // mulher: domingos alternados (nunca dois seguidos); homem: no máximo
-      // 2 seguidos (Lei 10.101). Conta desde o fim do mês anterior.
-      const hm=ehHomem(loja,n), lim=hm?3:2;
+      // regra geral: domingo sim, domingo não (nunca dois seguidos).
+      // Conta desde o fim do mês anterior.
+      const lim=2;
       const ds=S.map((x,i)=>Object.assign({i:i},x)).filter(x=>dataDe(x.m,x.d).getDay()===0);
       let run=[];
       ds.forEach(x=>{
@@ -2162,11 +2166,9 @@ function conferirEscala(){
         if(!t){ run=[]; return; }
         run.push(x);
         if(run.length===lim && x.i>=base0)
-          add('grave','domingo',n,(hm?lim+' domingos seguidos':'Domingos seguidos')+' ('+run.map(dm).join(', ')+')'+
-              (hm?' — homem pode no máximo 2 seguidos.':' — mulheres alternam: trabalha um domingo e folga o seguinte.')+
+          add('grave','domingo',n,'Domingos seguidos ('+run.map(dm).join(', ')+') — a regra é domingo sim, domingo não.'+
               (run[0].m===am?' A conta vem de '+rotMes(am)+'.':''),
-              hm?'Lei 10.101/2000 art. 6º — 1 domingo de folga a cada 3 semanas'
-                :'CLT art. 386 + regra da casa — domingos alternados para mulheres');
+              'Regra da casa — domingos alternados');
         if(run.length>=lim) run=[run[run.length-1]];
       });
     }
@@ -2343,7 +2345,7 @@ function htmlApontamentos(r){
   const nota=fim+virada;
   if(!r.length && regras5x2(mes))
     return '<div class="confOk">✓ <b>Nenhuma regra quebrada.</b> Escala 5x2 (2 folgas por semana), 42h por semana, '+
-           '8h24 por dia, domingos alternados para mulheres, horários do cadastro, 11h entre jornadas e cobertura — tudo dentro.</div>'+nota;
+           '8h24 por dia, domingo sim e domingo não, horários do cadastro, 11h entre jornadas e cobertura — tudo dentro.</div>'+nota;
   if(!r.length)
     return '<div class="confOk">✓ <b>Nenhuma regra quebrada.</b> Descanso semanal, domingos, 44h por semana, '+
            '8h por dia, 11h entre jornadas e cobertura — tudo dentro.</div>'+nota;
@@ -2826,7 +2828,6 @@ function renderCadastro(){
     '<div class="card"><h3>Vendedoras<span>'+esc(loja)+'</span></h3><div class="in" id="boxVend"></div></div>'+
     '<div class="card"><h3>Horários<span>'+esc(loja)+'</span></h3><div class="in" id="boxTur"></div></div>'+
     '<div class="card"><h3>Folgas e ausências<span>'+esc(loja)+'</span></h3><div class="in" id="boxAus"></div></div>'+
-    '<div class="card"><h3>Domingos<span>'+esc(loja)+'</span></h3><div class="in" id="boxHom"></div></div>'+
     '<div class="card"><h3>Lojas</h3><div class="in" id="boxLoja"></div></div>'+
     '<div class="acoes-fim"><button class="bt" id="btSalvarCad">Salvar cadastro</button></div>';
 
@@ -2877,18 +2878,10 @@ function renderCadastro(){
     '<button class="del" data-x="aus">×</button></div>').join('')+
     '<div class="addr"><button class="bt q" id="btAddAus">Adicionar</button></div>';
 
-  // a partir de dez/2026 as mulheres alternam domingos; aqui se marca quem é homem
-  const H=c.homens||[], gente=[], vistos={};
-  daEscala(loja,mes).concat(c.vendedoras.filter(v=>v.ativa!==false)).forEach(v=>{
-    const k=chaveNm(v.nome); if(vistos[k]) return; vistos[k]=1; gente.push(v.nome); });
-  $('#boxHom').innerHTML='<p class="dica">Desde dezembro/2026 a conferência não deixa <b>mulher</b> trabalhar dois domingos seguidos. '+
-    'Marque quem é <b>homem</b>: para eles vale a regra da lei, um domingo de folga a cada 3 semanas.</p>'+
-    gente.map(n=>{ const hm=ehHomem(loja,n);
-      return '<div class="lin hom"><span class="nm">'+esc(nomeVer(n))+'</span>'+
-        '<button class="tog'+(hm?' on':'')+'" data-hom="'+esc(n)+'">'+(hm?'Homem':'Mulher')+'</button></div>'; }).join('');
-
-  $('#boxLoja').innerHTML=LOJAS.map((l,i)=>
-    '<div class="lin" data-i="'+i+'"><input class="fld" data-c="loja" value="'+esc(l)+'">'+
+  ordLojas();
+  $('#boxLoja').innerHTML='<p class="dica">O nome da loja é a chave das escalas e dos benefícios — por isso não se muda aqui. '+
+    'O número (124, 125…) aparece sozinho na lista de lojas.</p>'+LOJAS.map((l,i)=>
+    '<div class="lin" data-i="'+i+'"><input class="fld" data-c="loja" value="'+esc(rotLoja(l))+'" readonly title="O nome da loja não pode ser alterado">'+
     '<button class="del" data-x="loja">×</button></div>').join('')+
     '<div class="addr"><input class="fld" id="novaLoja" placeholder="Nome da loja"><button class="bt q" id="btAddLoja">Adicionar</button></div>';
 }
@@ -3050,7 +3043,7 @@ function atualizarSeloConf(cf){
 
 function atualizarSelLoja(){
   if(!loja||LOJAS.indexOf(loja)<0) loja=LOJAS[0]||'';
-  $('#selLoja').innerHTML=LOJAS.map(l=>'<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+esc(l)+'</option>').join('');
+  $('#selLoja').innerHTML=opcoesLojas();
 }
 
 document.addEventListener('DOMContentLoaded',init);
@@ -3214,16 +3207,9 @@ async function init(){
       b.textContent='Salvando…'; b.disabled=true;
       await post({action:'saveConfig',config:{lojas:LOJAS,cad:CAD}});
       b.textContent='Salvar cadastro'; b.disabled=false;
-      $('#selLoja').innerHTML=LOJAS.map(l=>'<option value="'+esc(l)+'"'+(l===loja?' selected':'')+'>'+esc(l)+'</option>').join('');
+      $('#selLoja').innerHTML=opcoesLojas();
       toast('Cadastro salvo'); renderEscala(); return;
     }
-    const hb=b.closest('[data-hom]');
-    if(hb){ const n=hb.dataset.hom, k=chaveNm(n);
-      const H=(c.homens=c.homens||[]);
-      if(ehHomem(loja,n)){ const p=tokens(n)[0]||'';
-        c.homens=H.filter(h=>{ const th=tokens(h); return !(chaveNm(h)===k || (th.length===1 && th[0]===p)); }); }
-      else H.push(n);
-      renderCadastro(); toast('Marcado — clique em Salvar cadastro'); return; }
     const tog=b.closest('[data-c="ativa"]');
     if(tog){ const i=+tog.closest('.lin').dataset.i; c.vendedoras[i].ativa=c.vendedoras[i].ativa===false; renderCadastro(); return; }
     const del=b.closest('[data-x]');
@@ -3252,7 +3238,7 @@ async function init(){
       const p=e.target.selectionStart, v=norm(e.target.value).slice(0,3);
       if(e.target.value!==v){ e.target.value=v; try{ e.target.setSelectionRange(p,p); }catch(_){} }
     }
-    if(campo==='loja'){ LOJAS[i]=e.target.value; return; }
+    if(campo==='loja') return;                 // nome da loja é chave: não se edita
     if(lin.parentElement.id==='boxVend') c.vendedoras[i][campo]=e.target.value;
     else if(lin.parentElement.id==='boxTur'){ c.turnos[i][campo]=e.target.value;
       if(campo==='desde'||campo==='ate'){ clearTimeout(window._tRC); window._tRC=setTimeout(renderCadastro,600); } }
