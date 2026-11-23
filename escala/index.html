@@ -1123,7 +1123,7 @@ const DIA_5X2='2026-12-06';
 const novaRegra=(m,d)=>(String(m)+'-'+pad(d))>=DIA_5X2;
 // código da loja — só aparece na tela; a chave gravada continua o nome
 const COD_LOJA={'TUCURUVI':'124','BOM RETIRO':'125','PENHA':'126','MOOCA':'127','MAUÁ':'133','MAUA':'133',
-  'LAPA':'138','SÃO CAETANO CENTRO':'149','SAO CAETANO CENTRO':'149','SBC':'210','IGUATEMI CAMPINAS':'225','SCS':'527'};
+  'LAPA':'138','SÃO CAETANO CENTRO':'149','SAO CAETANO CENTRO':'149','SBC':'210','IGUATEMI CAMPINAS':'225','SCS':'517'};
 const codLoja=l=>COD_LOJA[norm(l)]||'';
 const rotLoja=l=>{ const c=codLoja(l); return c?c+' - '+l:l; };
 function ordLojas(){
