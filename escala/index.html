@@ -688,6 +688,7 @@ table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-w
   margin-left:6px;padding:1px 5px;border-radius:4px;background:var(--plum-soft);color:var(--plum);white-space:nowrap;}
 .lin.vend{flex-wrap:wrap;}
 .lin.vend .fun{flex:0 0 auto;width:auto;}
+.filtroVend{margin:2px 0 6px;}
 .lin.vend .vinc{flex-basis:100%;font-size:.72rem;color:var(--muted,#6B5B66);margin:2px 0 6px;}
 .lin.vend .vinc.ok{color:var(--ink,#241A21);}
 .lin.vend .vinc span{color:var(--muted,#6B5B66);}
@@ -2852,6 +2853,7 @@ function renderResumo(){
 // TELA: CADASTRO
 // ═══════════════════════════════════════════════════
 
+let FILTRO_VEND='ativas';   // Ativas | Inativas | Todas no cadastro
 function renderCadastro(){
   $('#cadGate').hidden=admin;
   $('#cadCorpo').hidden=!admin;
@@ -2875,14 +2877,22 @@ function renderCadastro(){
     return '<div class="vinc"><span>Não achei no Sólides.</span> <select class="fld vsel" data-vinc="'+i+'"><option value="">É a mesma que…</option>'+
       novas.map(x=>'<option value="'+esc(x.nome)+'">'+esc(x.nome)+'</option>').join('')+'</select></div>';
   };
-  $('#boxVend').innerHTML=(c.vendedoras.length?c.vendedoras.map((v,i)=>
+  // filtro do cadastro: por padrão só as ativas aparecem
+  const nAt=c.vendedoras.filter(v=>v.ativa!==false).length, nIn=c.vendedoras.length-nAt;
+  const filtroOk=v=>FILTRO_VEND==='todas' || (FILTRO_VEND==='inativas' ? v.ativa===false : v.ativa!==false);
+  const mostrar=c.vendedoras.map((v,i)=>[v,i]).filter(x=>filtroOk(x[0]));
+  $('#boxVend').innerHTML=
+    '<div class="vista filtroVend">'+
+      [['ativas','Ativas ('+nAt+')'],['inativas','Inativas ('+nIn+')'],['todas','Todas']].map(o=>
+        '<button data-fv="'+o[0]+'"'+(FILTRO_VEND===o[0]?' class="on"':'')+'>'+o[1]+'</button>').join('')+'</div>'+
+    (mostrar.length?mostrar.map(([v,i])=>
     '<div class="lin vend" data-i="'+i+'"><input class="fld" data-c="nome" value="'+esc(v.nome)+'">'+
     '<select class="fld fun" data-c="funcao" title="Função — só vendedora entra na conta Vendedor na loja">'+
       [['','Vendedora'],['GERENTE','Gerente'],['AUXILIAR','Auxiliar'],['ESTAGIARIA','Estagiária']].map(o=>
         '<option value="'+o[0]+'"'+(String(v.funcao||'').toUpperCase()===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
     '<button class="tog'+(v.ativa!==false?' on':'')+'" data-c="ativa">'+(v.ativa!==false?'Ativa':'Inativa')+'</button>'+
     '<button class="del" data-x="vend">×</button>'+vincular(v,i)+'</div>').join('')
-    :'<div class="vazio">Nenhuma vendedora.</div>')+
+    :'<div class="vazio">'+(FILTRO_VEND==='inativas'?'Nenhuma inativa.':'Nenhuma vendedora.')+'</div>')+
     (novas.length?'<div class="novas"><h4>Entraram no Sólides e não estão no cadastro</h4>'+
       '<p class="dica">Já aparecem na escala do mês aberto para a gerente lançar os dias. Adicione ao cadastro, '+
       'ou marque <b>Não entra</b> se a pessoa não faz escala (ex.: administrativo).</p>'+
@@ -3246,8 +3256,11 @@ async function init(){
       $('#selLoja').innerHTML=opcoesLojas();
       toast('Cadastro salvo'); renderEscala(); return;
     }
+    const fv=b.closest('[data-fv]');
+    if(fv){ FILTRO_VEND=fv.dataset.fv; renderCadastro(); return; }
     const tog=b.closest('[data-c="ativa"]');
-    if(tog){ const i=+tog.closest('.lin').dataset.i; c.vendedoras[i].ativa=c.vendedoras[i].ativa===false; renderCadastro(); return; }
+    if(tog){ const i=+tog.closest('.lin').dataset.i; const v=c.vendedoras[i]; v.ativa=v.ativa===false; renderCadastro();
+      if(FILTRO_VEND!=='todas') toast(v.nome+(v.ativa?' ativada — está em Ativas':' inativada — está em Inativas')+'. Clique em Salvar cadastro'); return; }
     const del=b.closest('[data-x]');
     if(del){
       const i=+del.closest('.lin').dataset.i, x=del.dataset.x;
