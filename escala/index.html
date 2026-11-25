@@ -687,6 +687,7 @@ table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-w
 .ln span .nova,td.nm .nova{font-style:normal;font-size:.56rem;font-weight:600;letter-spacing:.5px;text-transform:uppercase;
   margin-left:6px;padding:1px 5px;border-radius:4px;background:var(--plum-soft);color:var(--plum);white-space:nowrap;}
 .lin.vend{flex-wrap:wrap;}
+.lin.vend .fun{flex:0 0 auto;width:auto;}
 .lin.vend .vinc{flex-basis:100%;font-size:.72rem;color:var(--muted,#6B5B66);margin:2px 0 6px;}
 .lin.vend .vinc.ok{color:var(--ink,#241A21);}
 .lin.vend .vinc span{color:var(--muted,#6B5B66);}
@@ -746,7 +747,7 @@ table.pr-gr tr.cob td.nm{font-family:'Archivo',sans-serif;font-size:5.6pt;font-w
       <div class="tbw"><table class="t" id="tbResumo"></table></div>
     </div>
     <div class="card">
-      <h3>Quantas na loja por dia</h3>
+      <h3>Vendedores na loja por dia</h3>
       <div class="tbw"><table class="t" id="tbCob"></table></div>
     </div>
   </div></section>
@@ -1308,6 +1309,14 @@ function daEscala(l,m){
   return out;
 }
 
+// Função no cadastro: vazio = vendedora; GERENTE, AUXILIAR e ESTAGIARIA não entram
+// na conta "Vendedor na loja" (o aviso de dia sem ninguém conta todo mundo).
+function ehVendedora(l,v){
+  const c=cadLoja(l).vendedoras.find(x=>norm(x.nome)===norm(v.nome));
+  const f=String(((c||v).funcao)||'').toUpperCase();
+  return !f || f==='VENDEDORA';
+}
+
 // ═══════════════════════════════════════════════════
 // NOMES — o mesmo da tabela de benefícios (Sólides)
 // A escala guarda cada pessoa pelo nome curto do cadastro ("KATIA"); na
@@ -1747,7 +1756,7 @@ function renderEscala(){
     h+='<div class="dia'+(dw===0?' dom':'')+(FER[d]?' fer':'')+(ehHoje(d)?' hoje':'')+'" data-d="'+d+'" data-sem="'+sem+'">'+
        '<div class="dia-h"><span class="dow">'+DOW[dw]+'</span><span class="num">'+d+'</span>'+
        (FER[d]?'<span class="ferb" title="'+esc(FER[d])+'">FERIADO</span>':'')+
-       '<span class="cob" data-cob="'+d+'"><b>·</b> na loja</span>'+
+       '<span class="cob" data-cob="'+d+'"><b>·</b> vendedores na loja</span>'+
        (ant&&!BLOQ?'<button class="rep" data-rep="'+d+'" data-de="'+ant+'">repetir</button>':'')+
        '</div>';
     vs.forEach(v=>{
@@ -1805,11 +1814,11 @@ function htmlImpressao(){
       });
       h+='</tr>';
     });
-    h+='<tr class="cob"><td class="nm">NA LOJA</td>';
+    h+='<tr class="cob"><td class="nm">VENDEDOR NA LOJA</td>';
     sem.forEach(d=>{
       if(!d.noMes){ h+='<td class="fora"></td>'; return; }
-      let n=0; vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d.dia))) n++; });
-      h+='<td>'+(n||'–')+'</td>';
+      let n=0; vs.forEach(v=>{ if(ehVendedora(loja,v) && trabalha(loja,valor(v.nome,d.dia))) n++; });
+      h+='<td>'+n+'</td>';
     });
     h+='</tr></tbody></table></div>';
   });
@@ -1885,11 +1894,11 @@ function gerarExcel(){
       sem.forEach((d,i)=>F.merge(lv,COL(i),COL(i)+1));
     });
 
-    const cont=[{v:'NA LOJA',s:'contaNome'}];
+    const cont=[{v:'VENDEDOR NA LOJA',s:'contaNome'}];
     sem.forEach((d,i)=>{
       const c=COL(i);
       if(!d.noMes){ cont[c]={v:'',s:'fora'}; cont[c+1]={v:'',s:'fora'}; return; }
-      let q=0; vs.forEach(v=>{ if(trabalha(l,valor(v.nome,d.dia))) q++; });
+      let q=0; vs.forEach(v=>{ if(ehVendedora(l,v) && trabalha(l,valor(v.nome,d.dia))) q++; });
       const st=FER[d.dia]?'contaFer':'conta';
       cont[c]={n:q,s:st}; cont[c+1]={v:'',s:st};
     });
@@ -1998,7 +2007,7 @@ function htmlGrade(vs){
       });
       h+='</tr>';
     });
-    h+='<tr class="cob"><td class="nm">NA LOJA</td>';
+    h+='<tr class="cob"><td class="nm">VENDEDOR NA LOJA</td>';
     sem.forEach(d=>{
       const fh=d.noMes?FER[d.dia]:null;
       h+='<td'+(d.noMes?' data-cob="'+d.dia+'"':'')+(fh?' class="fer"':'')+'>'+(d.noMes?'<b>·</b>':'')+'</td>';
@@ -2047,7 +2056,7 @@ function htmlResumoSig(vs){
       });
       h+='</tr>';
     });
-    h+='<tr class="cob"><td class="nm">NA LOJA</td>';
+    h+='<tr class="cob"><td class="nm">VENDEDOR NA LOJA</td>';
     sem.forEach(d=>{
       h+='<td'+(d.noMes?' data-cob="'+d.dia+'"':'')+(d.noMes&&FER[d.dia]?' class="fer"':'')+'>'+
          (d.noMes?'<b>·</b>':'')+'</td>';
@@ -2148,11 +2157,16 @@ function conferirEscala(){
       const t = i<S.length && trabalha(loja,S[i].v);
       if(t){ if(!corr) ini=i; corr++; }
       else{
-        if(corr>=REGRA.diasSeguidos && (ini+corr-1)>=base0){
+        // na 5x2 (a partir de 06/12) o máximo são 5 dias seguidos; antes, 6
+        const fim=corr?S[ini+corr-1]:null;
+        const em5x2=!!fim && regras5x2(mes) && novaRegra(fim.m,fim.d);
+        const limSeg=em5x2?6:REGRA.diasSeguidos;
+        if(corr>=limSeg && (ini+corr-1)>=base0){
           const de=S[ini], ate=S[ini+corr-1];
           add('grave','descanso',n,corr+' dias seguidos sem folga, de '+dm(de)+' a '+dm(ate)+'.'+
+              (em5x2?' Na 5x2 o máximo são 5 dias seguidos.':'')+
               (de.m===am?' A conta vem de '+rotMes(am)+'.':''),
-              'CLT art. 67 — 24h de descanso a cada semana');
+              em5x2?'Escala 5x2 — no máximo 5 dias seguidos de trabalho':'CLT art. 67 — 24h de descanso a cada semana');
         }
         corr=0;
       }
@@ -2363,7 +2377,7 @@ function htmlApontamentos(r){
       'e o dia 1 deste entram na conferência.</p>';
   const nota=fim+virada;
   if(!r.length && regras5x2(mes))
-    return '<div class="confOk">✓ <b>Nenhuma regra quebrada.</b> Escala 5x2 (2 folgas por semana), 42h por semana, '+
+    return '<div class="confOk">✓ <b>Nenhuma regra quebrada.</b> Escala 5x2 (2 folgas por semana, no máximo 5 dias seguidos), 42h por semana, '+
            '8h24 por dia, domingo sim e domingo não, horários do cadastro, 11h entre jornadas e cobertura — tudo dentro.</div>'+nota;
   if(!r.length)
     return '<div class="confOk">✓ <b>Nenhuma regra quebrada.</b> Descanso semanal, domingos, 44h por semana, '+
@@ -2785,9 +2799,9 @@ function atualizar(){
   const vs=daEscala(loja,mes), nd=diasNoMes(mes);
   for(let d=1;d<=nd;d++){
     let n=0;
-    vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d))) n++; });
+    vs.forEach(v=>{ if(ehVendedora(loja,v) && trabalha(loja,valor(v.nome,d))) n++; });
     const el=document.querySelector('[data-cob="'+d+'"]');
-    if(el) el.innerHTML = (VISTA==='dia') ? '<b>'+(n||'·')+'</b> na loja' : '<b>'+(n||'·')+'</b>';
+    if(el) el.innerHTML = (VISTA==='dia') ? '<b>'+n+'</b> '+(n===1?'vendedor':'vendedores')+' na loja' : '<b>'+n+'</b>';
   }
   renderResumo();
 }
@@ -2825,9 +2839,9 @@ function renderResumo(){
   h+='<tr class="tot"><td>Total</td><td>'+A+'</td><td>'+B+'</td><td>'+C+'</td><td>'+D+'</td></tr></tbody>';
   $('#tbResumo').innerHTML=h;
 
-  let c='<thead><tr><th>Dia</th><th>Na loja</th></tr></thead><tbody>';
+  let c='<thead><tr><th>Dia</th><th>Vendedor na loja</th></tr></thead><tbody>';
   for(let d=1;d<=nd;d++){
-    let n=0; vs.forEach(v=>{ if(trabalha(loja,valor(v.nome,d))) n++; });
+    let n=0; vs.forEach(v=>{ if(ehVendedora(loja,v) && trabalha(loja,valor(v.nome,d))) n++; });
     const dw=dataDe(mes,d).getDay();
     c+='<tr><td>'+DOW[dw]+' '+d+'</td><td'+(n===0?' style="color:var(--fer);font-weight:600"':'')+'>'+n+'</td></tr>';
   }
@@ -2863,6 +2877,9 @@ function renderCadastro(){
   };
   $('#boxVend').innerHTML=(c.vendedoras.length?c.vendedoras.map((v,i)=>
     '<div class="lin vend" data-i="'+i+'"><input class="fld" data-c="nome" value="'+esc(v.nome)+'">'+
+    '<select class="fld fun" data-c="funcao" title="Função — só vendedora entra na conta Vendedor na loja">'+
+      [['','Vendedora'],['GERENTE','Gerente'],['AUXILIAR','Auxiliar'],['ESTAGIARIA','Estagiária']].map(o=>
+        '<option value="'+o[0]+'"'+(String(v.funcao||'').toUpperCase()===o[0]?' selected':'')+'>'+o[1]+'</option>').join('')+'</select>'+
     '<button class="tog'+(v.ativa!==false?' on':'')+'" data-c="ativa">'+(v.ativa!==false?'Ativa':'Inativa')+'</button>'+
     '<button class="del" data-x="vend">×</button>'+vincular(v,i)+'</div>').join('')
     :'<div class="vazio">Nenhuma vendedora.</div>')+
